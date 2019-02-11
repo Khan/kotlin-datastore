@@ -1,0 +1,5 @@
+schema-metadata/**/build
+google-cloud-datastore/**/build
+.gradle
+.idea
+*.iml
