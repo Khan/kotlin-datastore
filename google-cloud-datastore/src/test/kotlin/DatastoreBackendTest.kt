@@ -10,11 +10,15 @@ import io.kotlintest.specs.StringSpec
 class DatastoreBackendTest : StringSpec({
     val prodAndDevBackend = object : DatastoreBackend {
         override val envs = listOf(DatastoreEnv.DEV, DatastoreEnv.PROD)
-        override fun getDatastore(env: DatastoreEnv): Datastore = mock()
+        override fun getDatastore(
+            envAndProject: DatastoreEnvWithProject
+        ): Datastore = mock()
     }
     val testBackend = object : DatastoreBackend {
         override val envs = listOf(DatastoreEnv.TEST)
-        override fun getDatastore(env: DatastoreEnv): Datastore = mock()
+        override fun getDatastore(
+            envAndProject: DatastoreEnvWithProject
+        ): Datastore = mock()
     }
     "It should use the env parameter to return a backend" {
         val mockLoader = mock<DatastoreBackendServiceLoader> {

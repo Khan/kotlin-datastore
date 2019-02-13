@@ -1,4 +1,4 @@
-import org.gradle.api.tasks.testing.Test
+
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.api.tasks.testing.logging.TestLogEvent
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -49,6 +49,10 @@ allprojects {
     }
 
     tasks.withType<Test> {
+        // By default, Gradle won't run the tests if the code hasn't changed;
+        // ensure we actually run tests whenever we're asked.
+        outputs.upToDateWhen { false }
+
         testLogging {
             quiet {
                 events = setOf(

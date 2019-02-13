@@ -1,7 +1,7 @@
 /**
  * Environment-specific (test/dev/prod) datastore implementation loading.
  *
- * We'd like to be able to swap out implemenations of the datastore depending
+ * We'd like to be able to swap out implementations of the datastore depending
  * on environment, using the JVM ServiceLoader pattern. We'd also like to make
  * sure that (because the code that is going to consume the loaded services is
  * internal to this project) clients of this library have supplied at most one
@@ -14,13 +14,10 @@
  * TODO(colin): implement these.
  *
  * Most clients won't want to use this file directly and instead should use the
- * DB singleton object, which uses this service loader to select an
- * implementation.
- * TODO(colin): implement the DB singleton.
+ * DB singleton, which uses this service loader to select an implementation.
  */
 package org.khanacademy.datastore
 
-import com.google.cloud.datastore.Datastore
 import java.util.ServiceLoader
 
 /**
@@ -33,6 +30,17 @@ enum class DatastoreEnv {
 }
 
 /**
+ * Combination of an environment and a Google cloud project name.
+ */
+data class DatastoreEnvWithProject(
+    // DEV, TEST, or PROD
+    val env: DatastoreEnv,
+    // The Google cloud project name for the datastore we're accessing.
+    // For example, `khan-academy`
+    val project: String
+)
+
+/**
  * Wrapper for datastore access that indicates the applicable environment.
  */
 interface DatastoreBackend {
@@ -41,7 +49,9 @@ interface DatastoreBackend {
     // current environment when loading the service.
     val envs: List<DatastoreEnv>
 
-    fun getDatastore(env: DatastoreEnv): Datastore
+    fun getDatastore(
+        envAndProject: DatastoreEnvWithProject
+    ): com.google.cloud.datastore.Datastore
 }
 
 /**
