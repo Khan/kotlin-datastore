@@ -54,3 +54,15 @@ internal fun <T : Keyed<T>> Key<T>.toDatastoreKey(): DatastoreKey {
         rootKeyPathToDatastoreKey(rootPath),
         ::keyPathElementToDatastoreKey)
 }
+
+internal fun <T : Keyed<T>> DatastoreKey.toKey(): Key<T> = Key(
+    parentPath = ancestors.map { pathElement ->
+        if (pathElement.hasId()) {
+            pathElement.kind to KeyID(pathElement.id)
+        } else {
+            pathElement.kind to KeyName(pathElement.name)
+        }
+    },
+    kind = kind,
+    idOrName = if (hasId()) { KeyID(id) } else { KeyName(name) }
+)

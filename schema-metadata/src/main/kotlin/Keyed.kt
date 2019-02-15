@@ -9,11 +9,11 @@ typealias KeyPathElement = Pair<String, KeyIDOrName>
 /**
  * Typed wrapper around a datastore key.
  */
-interface Key<T : Keyed<T>> {
-    val parentPath: List<KeyPathElement>
-    val kind: String
+data class Key<T : Keyed<T>>(
+    val parentPath: List<KeyPathElement>,
+    val kind: String,
     val idOrName: KeyIDOrName
-
+) {
     fun path(): List<KeyPathElement> = parentPath + (kind to idOrName)
 }
 

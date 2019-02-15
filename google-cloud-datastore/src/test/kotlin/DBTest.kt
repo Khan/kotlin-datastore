@@ -1,6 +1,5 @@
 package org.khanacademy.datastore
 
-import com.google.cloud.datastore.Datastore
 import com.google.cloud.datastore.Transaction
 import com.nhaarman.mockitokotlin2.doAnswer
 import com.nhaarman.mockitokotlin2.mock
@@ -15,36 +14,35 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.khanacademy.metadata.Key
 import org.khanacademy.metadata.KeyName
-import org.khanacademy.metadata.KeyPathElement
 import org.khanacademy.metadata.Keyed
 import java.util.concurrent.CompletableFuture
 
 data class TestModel(override val key: Key<TestModel>) : Keyed<TestModel>
 
-fun makeMockDatastore(): Datastore = mock {
+fun makeMockDatastore(): com.google.cloud.datastore.Datastore = mock {
     on { newTransaction() } doAnswer { mock() }
 }
 
 class DBTest : StringSpec({
-    val testModel1 = TestModel(object : Key<TestModel> {
-        override val parentPath = listOf<KeyPathElement>()
-        override val kind = "TestModel"
-        override val idOrName = KeyName("test_model_1")
-    })
-    val testModel2 = TestModel(object : Key<TestModel> {
-        override val parentPath = listOf<KeyPathElement>()
-        override val kind = "TestModel"
-        override val idOrName = KeyName("test_model_2")
-    })
-    val testModel3 = TestModel(object : Key<TestModel> {
-        override val parentPath = listOf<KeyPathElement>()
-        override val kind = "TestModel"
-        override val idOrName = KeyName("test_model_3")
-    })
+    val testModel1 = TestModel(Key(
+        parentPath = listOf(),
+        kind = "TestModel",
+        idOrName = KeyName("test_model_1")
+    ))
+    val testModel2 = TestModel(Key(
+        parentPath = listOf(),
+        kind = "TestModel",
+        idOrName = KeyName("test_model_2")
+    ))
+    val testModel3 = TestModel(Key(
+        parentPath = listOf(),
+        kind = "TestModel",
+        idOrName = KeyName("test_model_3")
+    ))
 
     "In a non-transactional context, it should call the datastore directly" {
         val testDatastore = makeMockDatastore()
-        DatastoreWithContext(testDatastore)
+        Datastore(testDatastore)
         DB.get(testModel1.key)
         verify(testDatastore).get(testModel1.key.toDatastoreKey())
         verify(testDatastore, never()).get(testModel2.key.toDatastoreKey())
@@ -52,7 +50,7 @@ class DBTest : StringSpec({
 
     "It should call the datastore when waiting on async operations" {
         val testDatastore = makeMockDatastore()
-        DatastoreWithContext(testDatastore)
+        Datastore(testDatastore)
         val op = DB.getAsync(testModel2.key)
         runBlocking {
             op.await()
@@ -63,7 +61,7 @@ class DBTest : StringSpec({
 
     "It should call the datastore when waiting on multiple async operations" {
         val testDatastore = makeMockDatastore()
-        DatastoreWithContext(testDatastore)
+        Datastore(testDatastore)
         val firstOp = DB.getAsync(testModel2.key)
         val secondOp = DB.getAsync(testModel3.key)
         runBlocking {
@@ -77,13 +75,12 @@ class DBTest : StringSpec({
 
     "It should call get on the transaction in a transactional context" {
         val testDatastore = makeMockDatastore()
-        DatastoreWithContext(testDatastore)
+        Datastore(testDatastore)
         lateinit var testTransaction: Transaction
         DB.transactional {
             DB.get(testModel1.key)
             DB.get(testModel2.key)
-            testTransaction = (this as DatastoreWithContext).clientOrTransaction as
-                Transaction
+            testTransaction = clientOrTransaction as Transaction
         }
         verify(testTransaction).get(testModel1.key.toDatastoreKey())
         verify(testTransaction).get(testModel2.key.toDatastoreKey())
@@ -92,13 +89,12 @@ class DBTest : StringSpec({
 
     "It should call get on the transaction when waiting on async operations" {
         val testDatastore = makeMockDatastore()
-        DatastoreWithContext(testDatastore)
+        Datastore(testDatastore)
         lateinit var testTransaction: Transaction
         DB.transactional {
             val op1 = DB.getAsync(testModel1.key)
             val op2 = DB.getAsync(testModel2.key)
-            testTransaction = (this as DatastoreWithContext).clientOrTransaction as
-                Transaction
+            testTransaction = clientOrTransaction as Transaction
             runBlocking {
                 op1.await()
                 op2.await()
@@ -126,7 +122,7 @@ class DBTest : StringSpec({
         // happen in transaction 2, or some operations will happen
         // nontransactionally.
         val testDatastore = makeMockDatastore()
-        DatastoreWithContext(testDatastore)
+        Datastore(testDatastore)
         lateinit var testTransaction: Transaction
         lateinit var otherTransaction: Transaction
         val flag = CompletableFuture<Nothing>()
@@ -136,9 +132,7 @@ class DBTest : StringSpec({
         runBlocking {
             val t2 = async {
                 DB.transactional {
-                    testTransaction =
-                        (this as DatastoreWithContext).clientOrTransaction as
-                            Transaction
+                    testTransaction = clientOrTransaction as Transaction
                     val firstOp = DB.getAsync(testModel1.key)
                     // Wait on a future so that we can simulate another
                     // transaction happening while this one is going on and
@@ -153,9 +147,7 @@ class DBTest : StringSpec({
             }
             val t1 = async {
                 DB.transactional {
-                    otherTransaction =
-                        (this as DatastoreWithContext).clientOrTransaction as
-                            Transaction
+                    otherTransaction = clientOrTransaction as Transaction
                     val op = DB.getAsync(testModel2.key)
                     runBlocking {
                         op.await()
@@ -175,7 +167,7 @@ class DBTest : StringSpec({
 
     "It should correctly detect if we're in a transaction" {
         val testDatastore = makeMockDatastore()
-        DatastoreWithContext(testDatastore)
+        Datastore(testDatastore)
         DB.inTransaction() shouldBe false
         DB.transactional {
             DB.inTransaction() shouldBe true

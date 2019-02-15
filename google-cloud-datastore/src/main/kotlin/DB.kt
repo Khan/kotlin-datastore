@@ -112,4 +112,4 @@ val DB: org.khanacademy.datastore.Datastore
     get() =
         // NOTE: DatastoreWithContext sets localDB in its constructor,
         // so this persistently initializes the context if it's initially null.
-        localDB.get() ?: DatastoreWithContext(datastoreClient)
+        localDB.get() ?: Datastore(datastoreClient)
