@@ -5,9 +5,12 @@ package org.khanacademy.datastore
 
 import com.google.cloud.datastore.Entity
 import org.khanacademy.metadata.Keyed
+import org.khanacademy.metadata.Meta
 import kotlin.reflect.KClass
+import kotlin.reflect.KParameter
 import kotlin.reflect.KType
 import kotlin.reflect.full.createType
+import kotlin.reflect.full.findAnnotation
 import kotlin.reflect.full.primaryConstructor
 import kotlin.reflect.full.valueParameters
 import kotlin.reflect.full.withNullability
@@ -36,7 +39,7 @@ fun <T : Keyed<T>> Entity.toTypedModel(tRef: KClass<T>): T {
                         "Expected entity to have a key when getting.")
             } else {
                 getTypedProperty(
-                    kParameter.name
+                    datastoreName(kParameter)
                         ?: throw IllegalArgumentException(
                             "Unable to use nameless parameter $kParameter " +
                                 "on class ${tRef.simpleName} as a datastore " +
@@ -46,6 +49,21 @@ fun <T : Keyed<T>> Entity.toTypedModel(tRef: KClass<T>): T {
             }
         }.toMap()
     return constructor.callBy(parameters)
+}
+
+/**
+ * Find the name for the given parameter in the datastore.
+ *
+ * Prefer a `@Meta(name = ...)` annotation if present; otherwise, fallback on
+ * the name in code.
+ */
+internal fun datastoreName(kParameter: KParameter): String? {
+    val annotName = kParameter.findAnnotation<Meta>()?.name
+    return if (annotName != null && annotName != "") {
+        annotName
+    } else {
+        kParameter.name
+    }
 }
 
 /**
