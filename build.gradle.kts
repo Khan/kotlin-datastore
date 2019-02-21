@@ -29,6 +29,7 @@ repositories {
 
 plugins {
     kotlin("jvm") version "1.3.11"
+    id("org.jetbrains.dokka") version "0.9.17"
 }
 
 val kotlinVersion = "1.3.11"
@@ -79,5 +80,19 @@ allprojects {
             compile(kotlin("reflect", kotlinVersion))
         }
         testCompile("io.kotlintest:kotlintest-runner-junit5:3.1.11")
+    }
+}
+
+evaluationDependsOnChildren()
+
+tasks {
+    dokka {
+        moduleName = rootProject.name
+        outputFormat = "html"
+        outputDirectory = "$buildDir/docs"
+        jdkVersion = 8
+        sourceDirs = subprojects.flatMap {
+            it.sourceSets.main.get().allSource.sourceDirectories
+        }
     }
 }

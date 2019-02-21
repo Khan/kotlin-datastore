@@ -1,3 +1,4 @@
+build
 schema-metadata/**/build
 google-cloud-datastore/**/build
 .gradle
