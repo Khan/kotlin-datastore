@@ -3,9 +3,13 @@
  */
 package org.khanacademy.datastore
 
+import com.google.cloud.Timestamp
 import com.google.cloud.datastore.Entity
 import org.khanacademy.metadata.Keyed
 import org.khanacademy.metadata.Meta
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlin.reflect.KClass
 import kotlin.reflect.KParameter
 import kotlin.reflect.KType
@@ -98,6 +102,18 @@ internal fun Entity.getTypedProperty(
     }
 )
 
+/**
+ * Convert a datastore timestamp type to a java-native LocalDateTime.
+ *
+ * We use the convention where all times stored in the datastore are expressed
+ * as naive date-times expressed in UTC.
+ */
+internal fun convertTimestamp(timestamp: Timestamp): LocalDateTime =
+    LocalDateTime.ofInstant(
+        Instant.ofEpochSecond(timestamp.seconds, timestamp.nanos.toLong()),
+        ZoneId.of("UTC")
+    )
+
 // Precalculated types for doing conversions from Google datastore entities.
 // (These allow us to avoid reconstructing the type objects for every
 // property.)
@@ -127,6 +143,11 @@ private val StringTypes = listOf(
     String::class.createType().withNullability(true)
 )
 
+private val TimestampTypes = listOf(
+    LocalDateTime::class.createType(),
+    LocalDateTime::class.createType().withNullability(true)
+)
+
 /**
  * Get the value of an entity's property, given that we know it's present.
  */
@@ -138,11 +159,11 @@ internal fun Entity.getExistingTypedProperty(
     in DoubleTypes -> getDouble(name)
     in LongTypes -> getLong(name)
     in StringTypes -> getString(name)
+    in TimestampTypes -> getTimestamp(name)?.let(::convertTimestamp)
     // TODO(colin): nested entities
     // TODO(colin): key properties
     // TODO(colin): location (lat/lng) properties
     // TODO(colin): repeated properties
-    // TODO(colin): timestamp properties
     // TODO(colin): JSON properties
     // TODO(colin): computed properties (do we need these?)
     // TODO(colin): in general we want to support all ndb property types, see:

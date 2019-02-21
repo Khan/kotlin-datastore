@@ -1,5 +1,6 @@
 package org.khanacademy.datastore
 
+import com.google.cloud.Timestamp
 import com.google.cloud.datastore.Blob
 import com.google.cloud.datastore.Entity
 import com.google.cloud.datastore.NullValue
@@ -9,6 +10,9 @@ import io.kotlintest.specs.StringSpec
 import org.khanacademy.metadata.Key
 import org.khanacademy.metadata.KeyName
 import org.khanacademy.metadata.Keyed
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 
 data class PrimitiveTestModel(
     val aString: String?,
@@ -16,6 +20,7 @@ data class PrimitiveTestModel(
     val aBool: Boolean,
     val aDouble: Double,
     val someBytes: ByteArray,
+    val aTimestamp: LocalDateTime?,
     override val key: Key<PrimitiveTestModel>
 ) : Keyed<PrimitiveTestModel>
 
@@ -28,6 +33,7 @@ class EntityConversionTest : StringSpec({
             .set("aLong", 4L)
             .set("aBool", true)
             .set("aDouble", 2.71828)
+            .set("aTimestamp", Timestamp.ofTimeSecondsAndNanos(0, 0))
             .set("someBytes", Blob.copyFrom("abcdefg".toByteArray()))
             .build()
 
@@ -38,6 +44,9 @@ class EntityConversionTest : StringSpec({
         converted.aLong shouldBe 4L
         converted.aBool shouldBe true
         converted.aDouble shouldBe 2.71828
+        converted.aTimestamp shouldBe LocalDateTime.ofInstant(
+            Instant.EPOCH,
+            ZoneId.of("UTC"))
         String(converted.someBytes) shouldBe "abcdefg"
     }
 
