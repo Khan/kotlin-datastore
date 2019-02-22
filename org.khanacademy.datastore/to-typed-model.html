@@ -1,0 +1,19 @@
+<HTML>
+<HEAD>
+<meta charset="UTF-8">
+<title>toTypedModel - kotlin-datastore</title>
+<link rel="stylesheet" href="../../style.css">
+</HEAD>
+<BODY>
+<a href="../index.html">kotlin-datastore</a>&nbsp;/&nbsp;<a href="index.html">org.khanacademy.datastore</a>&nbsp;/&nbsp;<a href="./to-typed-model.html">toTypedModel</a><br/>
+<br/>
+<h1>toTypedModel</h1>
+<a name="org.khanacademy.datastore$toTypedModel(, kotlin.reflect.KClass((org.khanacademy.datastore.toTypedModel.T)))"></a>
+<code><span class="keyword">fun </span><span class="symbol">&lt;</span><span class="identifier">T</span>&nbsp;<span class="symbol">:</span>&nbsp;<a href="../org.khanacademy.metadata/-keyed/index.html"><span class="identifier">Keyed</span></a><span class="symbol">&lt;</span><a href="to-typed-model.html#T"><span class="identifier">T</span></a><span class="symbol">&gt;</span><span class="symbol">&gt;</span> <span class="identifier">&lt;ERROR CLASS&gt;</span><span class="symbol">.</span><span class="identifier">toTypedModel</span><span class="symbol">(</span><span class="identifier" id="org.khanacademy.datastore$toTypedModel(, kotlin.reflect.KClass((org.khanacademy.datastore.toTypedModel.T)))/tRef">tRef</span><span class="symbol">:</span>&nbsp;<a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin.reflect/-k-class/index.html"><span class="identifier">KClass</span></a><span class="symbol">&lt;</span><a href="to-typed-model.html#T"><span class="identifier">T</span></a><span class="symbol">&gt;</span><span class="symbol">)</span><span class="symbol">: </span><a href="to-typed-model.html#T"><span class="identifier">T</span></a></code>
+<p>Convert a Google cloud datastore entity to one of our model classes.</p>
+<p>This uses reflection internally to accomplish this and will throw if the
+entity doesn't conform to the model's schema.</p>
+<p>TODO(colin): support generating non-reflective converters using annotation
+processors.</p>
+</BODY>
+</HTML>

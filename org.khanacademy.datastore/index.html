@@ -1,0 +1,151 @@
+<HTML>
+<HEAD>
+<meta charset="UTF-8">
+<title>org.khanacademy.datastore - kotlin-datastore</title>
+<link rel="stylesheet" href="../../style.css">
+</HEAD>
+<BODY>
+<a href="../index.html">kotlin-datastore</a>&nbsp;/&nbsp;<a href="./index.html">org.khanacademy.datastore</a><br/>
+<br/>
+<h2>Package org.khanacademy.datastore</h2>
+<h3>Types</h3>
+<table>
+<tbody>
+<tr>
+<td>
+<p><a href="-datastore/index.html">Datastore</a></p>
+</td>
+<td>
+<code><span class="keyword">class </span><span class="identifier">Datastore</span></code>
+<p>Main implementation for interacting with the datastore.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><a href="-datastore-backend/index.html">DatastoreBackend</a></p>
+</td>
+<td>
+<code><span class="keyword">interface </span><span class="identifier">DatastoreBackend</span></code>
+<p>Wrapper for datastore access that indicates the applicable environment.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><a href="-datastore-env/index.html">DatastoreEnv</a></p>
+</td>
+<td>
+<code><span class="keyword">enum</span> <span class="keyword">class </span><span class="identifier">DatastoreEnv</span></code>
+<p>Environment to which a given DatastoreBackend applies.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><a href="-datastore-env-with-project/index.html">DatastoreEnvWithProject</a></p>
+</td>
+<td>
+<code><span class="keyword">data</span> <span class="keyword">class </span><span class="identifier">DatastoreEnvWithProject</span></code>
+<p>Combination of an environment and a Google cloud project name.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><a href="-google-cloud-datastore-backend/index.html">GoogleCloudDatastoreBackend</a></p>
+</td>
+<td>
+<code><span class="keyword">class </span><span class="identifier">GoogleCloudDatastoreBackend</span>&nbsp;<span class="symbol">:</span>&nbsp;<a href="-datastore-backend/index.html"><span class="identifier">DatastoreBackend</span></a></code>
+<p>DatastoreBackend using the google-cloud-java client library for datastore.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><a href="-transaction-options/index.html">TransactionOptions</a></p>
+</td>
+<td>
+<code><span class="keyword">data</span> <span class="keyword">class </span><span class="identifier">TransactionOptions</span></code></td>
+</tr>
+</tbody>
+</table>
+<h3>Type Aliases</h3>
+<table>
+<tbody>
+<tr>
+<td>
+<p><a href="-datastore-key.html">DatastoreKey</a></p>
+</td>
+<td>
+<code><span class="keyword">typealias </span><span class="identifier">DatastoreKey</span>&nbsp;<span class="symbol">=</span>&nbsp;<span class="identifier">&lt;ERROR CLASS&gt;</span></code></td>
+</tr>
+</tbody>
+</table>
+<h3>Properties</h3>
+<table>
+<tbody>
+<tr>
+<td>
+<p><a href="-d-b.html">DB</a></p>
+</td>
+<td>
+<code><span class="keyword">val </span><span class="identifier">DB</span><span class="symbol">: </span><a href="-datastore/index.html"><span class="identifier">Datastore</span></a></code>
+<p>Primary external-facing API for interacting with the datastore.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3>Functions</h3>
+<table>
+<tbody>
+<tr>
+<td>
+<p><a href="get.html">get</a></p>
+</td>
+<td>
+<code><span class="keyword">fun </span><span class="symbol">&lt;</span><span class="identifier">T</span>&nbsp;<span class="symbol">:</span>&nbsp;<a href="../org.khanacademy.metadata/-keyed/index.html"><span class="identifier">Keyed</span></a><span class="symbol">&lt;</span><a href="get.html#T"><span class="identifier">T</span></a><span class="symbol">&gt;</span><span class="symbol">&gt;</span> <a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="identifier">get</span><span class="symbol">(</span><span class="identifier" id="org.khanacademy.datastore$get(org.khanacademy.datastore.Datastore, org.khanacademy.metadata.Key((org.khanacademy.datastore.get.T)))/key">key</span><span class="symbol">:</span>&nbsp;<a href="../org.khanacademy.metadata/-key/index.html"><span class="identifier">Key</span></a><span class="symbol">&lt;</span><a href="get.html#T"><span class="identifier">T</span></a><span class="symbol">&gt;</span><span class="symbol">)</span><span class="symbol">: </span><a href="get.html#T"><span class="identifier">T</span></a><span class="symbol">?</span></code>
+<p>Synchronous get by key of an object from the datastore.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><a href="get-async.html">getAsync</a></p>
+</td>
+<td>
+<code><span class="keyword">fun </span><span class="symbol">&lt;</span><span class="identifier">T</span>&nbsp;<span class="symbol">:</span>&nbsp;<a href="../org.khanacademy.metadata/-keyed/index.html"><span class="identifier">Keyed</span></a><span class="symbol">&lt;</span><a href="get-async.html#T"><span class="identifier">T</span></a><span class="symbol">&gt;</span><span class="symbol">&gt;</span> <a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="identifier">getAsync</span><span class="symbol">(</span><span class="identifier" id="org.khanacademy.datastore$getAsync(org.khanacademy.datastore.Datastore, org.khanacademy.metadata.Key((org.khanacademy.datastore.getAsync.T)))/key">key</span><span class="symbol">:</span>&nbsp;<a href="../org.khanacademy.metadata/-key/index.html"><span class="identifier">Key</span></a><span class="symbol">&lt;</span><a href="get-async.html#T"><span class="identifier">T</span></a><span class="symbol">&gt;</span><span class="symbol">)</span><span class="symbol">: </span><span class="identifier">&lt;ERROR CLASS&gt;</span><span class="symbol">&lt;</span><a href="get-async.html#T"><span class="identifier">T</span></a><span class="symbol">?</span><span class="symbol">&gt;</span></code>
+<p>Asynchronous get by key of an object from the datastore.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><a href="in-transaction.html">inTransaction</a></p>
+</td>
+<td>
+<code><span class="keyword">fun </span><a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="identifier">inTransaction</span><span class="symbol">(</span><span class="symbol">)</span><span class="symbol">: </span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-boolean/index.html"><span class="identifier">Boolean</span></a></code></td>
+</tr>
+<tr>
+<td>
+<p><a href="initialize-env-and-project.html">initializeEnvAndProject</a></p>
+</td>
+<td>
+<code><span class="keyword">fun </span><span class="identifier">initializeEnvAndProject</span><span class="symbol">(</span><span class="identifier" id="org.khanacademy.datastore$initializeEnvAndProject(org.khanacademy.datastore.DatastoreEnv, kotlin.String)/env">env</span><span class="symbol">:</span>&nbsp;<a href="-datastore-env/index.html"><span class="identifier">DatastoreEnv</span></a><span class="symbol">, </span><span class="identifier" id="org.khanacademy.datastore$initializeEnvAndProject(org.khanacademy.datastore.DatastoreEnv, kotlin.String)/project">project</span><span class="symbol">:</span>&nbsp;<a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-string/index.html"><span class="identifier">String</span></a><span class="symbol">)</span><span class="symbol">: </span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-unit/index.html"><span class="identifier">Unit</span></a></code>
+<p>Manually initialize the datastore environment.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><a href="to-typed-model.html">toTypedModel</a></p>
+</td>
+<td>
+<code><span class="keyword">fun </span><span class="symbol">&lt;</span><span class="identifier">T</span>&nbsp;<span class="symbol">:</span>&nbsp;<a href="../org.khanacademy.metadata/-keyed/index.html"><span class="identifier">Keyed</span></a><span class="symbol">&lt;</span><a href="to-typed-model.html#T"><span class="identifier">T</span></a><span class="symbol">&gt;</span><span class="symbol">&gt;</span> <span class="identifier">&lt;ERROR CLASS&gt;</span><span class="symbol">.</span><span class="identifier">toTypedModel</span><span class="symbol">(</span><span class="identifier" id="org.khanacademy.datastore$toTypedModel(, kotlin.reflect.KClass((org.khanacademy.datastore.toTypedModel.T)))/tRef">tRef</span><span class="symbol">:</span>&nbsp;<a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin.reflect/-k-class/index.html"><span class="identifier">KClass</span></a><span class="symbol">&lt;</span><a href="to-typed-model.html#T"><span class="identifier">T</span></a><span class="symbol">&gt;</span><span class="symbol">)</span><span class="symbol">: </span><a href="to-typed-model.html#T"><span class="identifier">T</span></a></code>
+<p>Convert a Google cloud datastore entity to one of our model classes.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><a href="transactional.html">transactional</a></p>
+</td>
+<td>
+<code><span class="keyword">fun </span><span class="symbol">&lt;</span><span class="identifier">T</span><span class="symbol">&gt;</span> <a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="identifier">transactional</span><span class="symbol">(</span><span class="identifier" id="org.khanacademy.datastore$transactional(org.khanacademy.datastore.Datastore, kotlin.Function1((org.khanacademy.datastore.Datastore, org.khanacademy.datastore.transactional.T)))/block">block</span><span class="symbol">:</span>&nbsp;<a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="symbol">(</span><span class="symbol">)</span>&nbsp;<span class="symbol">-&gt;</span>&nbsp;<a href="transactional.html#T"><span class="identifier">T</span></a><span class="symbol">)</span><span class="symbol">: </span><a href="transactional.html#T"><span class="identifier">T</span></a></code><br/>
+<code><span class="keyword">fun </span><span class="symbol">&lt;</span><span class="identifier">T</span><span class="symbol">&gt;</span> <a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="identifier">transactional</span><span class="symbol">(</span><span class="identifier" id="org.khanacademy.datastore$transactional(org.khanacademy.datastore.Datastore, org.khanacademy.datastore.TransactionOptions, kotlin.Function1((org.khanacademy.datastore.Datastore, org.khanacademy.datastore.transactional.T)))/options">options</span><span class="symbol">:</span>&nbsp;<a href="-transaction-options/index.html"><span class="identifier">TransactionOptions</span></a><span class="symbol">, </span><span class="identifier" id="org.khanacademy.datastore$transactional(org.khanacademy.datastore.Datastore, org.khanacademy.datastore.TransactionOptions, kotlin.Function1((org.khanacademy.datastore.Datastore, org.khanacademy.datastore.transactional.T)))/block">block</span><span class="symbol">:</span>&nbsp;<a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="symbol">(</span><span class="symbol">)</span>&nbsp;<span class="symbol">-&gt;</span>&nbsp;<a href="transactional.html#T"><span class="identifier">T</span></a><span class="symbol">)</span><span class="symbol">: </span><a href="transactional.html#T"><span class="identifier">T</span></a></code></td>
+</tr>
+</tbody>
+</table>
+</BODY>
+</HTML>

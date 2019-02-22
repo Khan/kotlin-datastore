@@ -1,0 +1,20 @@
+<HTML>
+<HEAD>
+<meta charset="UTF-8">
+<title>DB - kotlin-datastore</title>
+<link rel="stylesheet" href="../../style.css">
+</HEAD>
+<BODY>
+<a href="../index.html">kotlin-datastore</a>&nbsp;/&nbsp;<a href="index.html">org.khanacademy.datastore</a>&nbsp;/&nbsp;<a href="./-d-b.html">DB</a><br/>
+<br/>
+<h1>DB</h1>
+<a name="org.khanacademy.datastore$DB"></a>
+<code><span class="keyword">val </span><span class="identifier">DB</span><span class="symbol">: </span><a href="-datastore/index.html"><span class="identifier">Datastore</span></a></code>
+<p>Primary external-facing API for interacting with the datastore.</p>
+<p>Use this singleton for all datastore access, regardless of context.</p>
+<p>The internals of this singleton ensure that the datastore context
+(transaction vs. not, which transaction if applicable) follows the way the
+code reads, regardless of how asynchronous operations are actually executed
+over potentially multiple background threads.</p>
+</BODY>
+</HTML>

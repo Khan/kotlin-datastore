@@ -1,0 +1,64 @@
+<HTML>
+<HEAD>
+<meta charset="UTF-8">
+<title>GoogleCloudDatastoreBackend - kotlin-datastore</title>
+<link rel="stylesheet" href="../../../style.css">
+</HEAD>
+<BODY>
+<a href="../../index.html">kotlin-datastore</a>&nbsp;/&nbsp;<a href="../index.html">org.khanacademy.datastore</a>&nbsp;/&nbsp;<a href="./index.html">GoogleCloudDatastoreBackend</a><br/>
+<br/>
+<h1>GoogleCloudDatastoreBackend</h1>
+<code><span class="keyword">class </span><span class="identifier">GoogleCloudDatastoreBackend</span>&nbsp;<span class="symbol">:</span>&nbsp;<a href="../-datastore-backend/index.html"><span class="identifier">DatastoreBackend</span></a></code>
+<p>DatastoreBackend using the google-cloud-java client library for datastore.</p>
+<p>This is usable for prod, as well as using the gcloud datastore emulator in
+the development environment. Refer to the datastore emulator docs for setup
+instructions for the dev environment. This class will not automatically set
+up the emulator in dev.
+See https://cloud.google.com/datastore/docs/tools/datastore-emulator
+for more info on dev vs. prod configuration.
+TODO(colin): is there a way we can configure it to set up and use the
+emulator automatically? (we might be able to use a call out to <code>ps</code> to find
+the emulator process and set the env variables correctly using that?)
+TODO(colin): INFRA-2792 we should at least assert that if we're in DEV, the
+env variable required to use the emulator is set, so that we're not
+accidentally writing to prod from the devserver.</p>
+<h3>Constructors</h3>
+<table>
+<tbody>
+<tr>
+<td>
+<p><a href="-init-.html">&lt;init&gt;</a></p>
+</td>
+<td>
+<code><span class="identifier">GoogleCloudDatastoreBackend</span><span class="symbol">(</span><span class="symbol">)</span></code>
+<p>DatastoreBackend using the google-cloud-java client library for datastore.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3>Properties</h3>
+<table>
+<tbody>
+<tr>
+<td>
+<p><a href="envs.html">envs</a></p>
+</td>
+<td>
+<code><span class="keyword">val </span><span class="identifier">envs</span><span class="symbol">: </span><span class="identifier">&lt;ERROR CLASS&gt;</span></code></td>
+</tr>
+</tbody>
+</table>
+<h3>Functions</h3>
+<table>
+<tbody>
+<tr>
+<td>
+<p><a href="get-datastore.html">getDatastore</a></p>
+</td>
+<td>
+<code><span class="keyword">fun </span><span class="identifier">getDatastore</span><span class="symbol">(</span><span class="identifier" id="org.khanacademy.datastore.GoogleCloudDatastoreBackend$getDatastore(org.khanacademy.datastore.DatastoreEnvWithProject)/envAndProject">envAndProject</span><span class="symbol">:</span>&nbsp;<a href="../-datastore-env-with-project/index.html"><span class="identifier">DatastoreEnvWithProject</span></a><span class="symbol">)</span><span class="symbol">: </span><span class="identifier">&lt;ERROR CLASS&gt;</span></code></td>
+</tr>
+</tbody>
+</table>
+</BODY>
+</HTML>
