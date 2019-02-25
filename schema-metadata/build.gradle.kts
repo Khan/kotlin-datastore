@@ -14,9 +14,39 @@ repositories {
 
 plugins {
     kotlin("jvm")
+    `maven-publish`
 }
 
 dependencies {
     compile(kotlin("stdlib-jdk8"))
     compile(kotlin("reflect"))
+}
+
+val toplevelDescription = description
+publishing {
+    publications {
+        create<MavenPublication>("schema-metadata") {
+            artifactId = "schema-metadata"
+            from(components["java"])
+            pom {
+                name.set("schema-metadata")
+                description.set(toplevelDescription)
+                url.set("https://github.com/khan/kotlin-datastore")
+                licenses {
+                    license {
+                        name.set("The MIT License (MIT)")
+                        url.set(
+                            "https://github.com/Khan/kotlin-datastore/blob/" +
+                                "master/LICENSE")
+                    }
+                }
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            url = uri("gcs://ka-maven-repository/maven2")
+        }
+    }
 }

@@ -12,6 +12,7 @@ repositories {
 
 plugins {
     kotlin("jvm")
+    `maven-publish`
 }
 
 dependencies {
@@ -40,6 +41,35 @@ sourceSets {
             // client code can't accidentally pull in the internal stub because
             // it's on the default resource path for this package.
             srcDir("src/internal-resources")
+        }
+    }
+}
+
+val toplevelDescription = description
+publishing {
+    publications {
+        create<MavenPublication>("kotlin-datastore") {
+            artifactId = "kotlin-datastore"
+            from(components["java"])
+            pom {
+                name.set("kotlin-datstore")
+                description.set(toplevelDescription)
+                url.set("https://github.com/khan/kotlin-datastore")
+                licenses {
+                    license {
+                        name.set("The MIT License (MIT)")
+                        url.set(
+                            "https://github.com/Khan/kotlin-datastore/blob/" +
+                                "master/LICENSE")
+                    }
+                }
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            url = uri("gcs://ka-maven-repository/maven2")
         }
     }
 }
