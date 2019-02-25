@@ -47,7 +47,7 @@ internal fun keyPathElementToDatastoreKey(
 /**
  * Convert our abstract keys to the Google cloud datastore key class.
  */
-internal fun <T : Keyed<T>> Key<T>.toDatastoreKey(): DatastoreKey {
+fun <T : Keyed<T>> Key<T>.toDatastoreKey(): DatastoreKey {
     val rootPath = path().first()
     val remainingPath = path().drop(1)
     return remainingPath.fold(
@@ -55,7 +55,10 @@ internal fun <T : Keyed<T>> Key<T>.toDatastoreKey(): DatastoreKey {
         ::keyPathElementToDatastoreKey)
 }
 
-internal fun <T : Keyed<T>> DatastoreKey.toKey(): Key<T> = Key(
+/**
+ * Convert a Google cloud datstore key to our abstract key class.
+ */
+fun <T : Keyed<T>> DatastoreKey.toKey(): Key<T> = Key(
     parentPath = ancestors.map { pathElement ->
         if (pathElement.hasId()) {
             pathElement.kind to KeyID(pathElement.id)

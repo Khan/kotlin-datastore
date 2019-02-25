@@ -74,25 +74,22 @@ fun <T> Datastore.transactional(
         val txn = (
             clientOrTransaction as com.google.cloud.datastore.Datastore
             ).newTransaction()
-        val context = try {
-            // NOTE: The context constructor will set the value of
-            // `localDB`.
+        // We have to set back to the nontransactional context right now,
+        // and then run the actual block in the transactional context
+        // explicitly.
+        // If we don't do this, then if the block we're executing
+        // transactionally does any async operations that may suspend
+        // execution, its transaction may leak into the next thing that
+        // runs on that thread. Doing it this way lets the runtime take
+        // care of activating and restoring the context automatically
+        // whenever the async code in the transaction is executing.
+        // We use the restoreLocalDBAfter helper to ensure that if the
+        // context constructor threw an exception between setting
+        // `localDB` and adding itself to the coroutine context, that
+        // we clean up properly.
+        val context = restoreLocalDBAfter {
+            // NOTE: This constructor will set the value of localDB.
             Datastore(txn)
-        } finally {
-            // We have to set back to the nontransactional context right now,
-            // and then run the actual block in the transactional context
-            // explicitly.
-            // If we don't do this, then if the block we're executing
-            // transactionally does any async operations that may suspend
-            // execution, its transaction may leak into the next thing that
-            // runs on that thread. Doing it this way lets the runtime take
-            // care of activating and restoring the context automatically
-            // whenever the async code in the transaction is executing.
-            // We have to do this in a `finally` to ensure that if the
-            // context constructor threw an exception between setting
-            // `localDB` and adding itself to the coroutine context, that
-            // we clean up properly.
-            localDB.set(this)
         }
         val deferredResult = context.async {
             with(context, block)
@@ -169,4 +166,18 @@ fun <T : Keyed<T>> internalGetAsync(
     datastore: Datastore, key: Key<T>, tReference: KClass<T>
 ): Deferred<T?> = datastore.async {
     internalGet(datastore, key, tReference)
+}
+
+/**
+ * Run some code, setting localDB back to its current value afterwards.
+ *
+ * Uses try/finally, so this works even on exception.
+ */
+internal fun <T> restoreLocalDBAfter(block: () -> T): T {
+    val origLocalDB = localDB.get()
+    try {
+        return block()
+    } finally {
+        localDB.set(origLocalDB)
+    }
 }
