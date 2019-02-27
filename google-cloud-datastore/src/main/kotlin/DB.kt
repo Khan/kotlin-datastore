@@ -5,6 +5,26 @@
  */
 package org.khanacademy.datastore
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+/**
+ * Scope for running the lazy initialization of env/project.
+ *
+ * We use the IO dispatcher to avoid the possibility of deadlock waiting on the
+ * mutex if someone accidentally calls the initialization from a coroutine not
+ * running in a blocking-ok context.
+ */
+private object InitializationScope : CoroutineScope {
+    override val coroutineContext = Dispatchers.IO
+}
+
 /**
  * Holder for the datastore environment.
  *
@@ -13,6 +33,9 @@ package org.khanacademy.datastore
  * variables DATASTORE_ENV and DATASTORE_PROJECT.
  */
 internal object DBEnvAndProject {
+    // Used to ensure only one caller can initialize the env/project at a time.
+    private val Lock = Mutex()
+
     // When creating a datastore backend, we'll set the environment from this
     // process environment variable if not set from code.
     const val PROCESS_ENV_VAR = "DATASTORE_ENV"
@@ -22,33 +45,65 @@ internal object DBEnvAndProject {
 
     private lateinit var env: DatastoreEnvWithProject
 
-    internal fun init(env: DatastoreEnv, project: String) {
-        synchronized(this) {
-            if (this::env.isInitialized) {
-                throw IllegalStateException(
-                    "Datastore environment has already been initialized.")
-            }
-            this.env = DatastoreEnvWithProject(env, project)
+    // Note: the caller is responsible for locking using the `Lock` mutex
+    private fun init(env: DatastoreEnv, project: String) {
+        if (this::env.isInitialized) {
+            throw IllegalStateException(
+                "Datastore environment has already been initialized.")
         }
+        this.env = DatastoreEnvWithProject(env, project)
     }
 
-    internal fun getEnvAndProject(): DatastoreEnvWithProject {
-        if (!this::env.isInitialized) {
-            val datastoreEnv = System.getenv(PROCESS_ENV_VAR)
-                ?.let { DatastoreEnv.valueOf(it) }
-                // TODO(colin): more specific exception class?
-                ?: throw Exception(
-                    "You must provide a datastore environment. Either call " +
-                        "`DBEnv.init(env, project)` or set the process " +
-                        "environment variable $PROCESS_ENV_VAR.")
-            val datastoreProject = System.getenv(PROCESS_PROJECT_ENV_VAR)
-                ?: throw Exception(
-                    "You must provide a datastore project. Either call " +
-                        "`DBEnv.init(env, project)` or set the process " +
-                        "environment variable $PROCESS_PROJECT_ENV_VAR.")
-            init(datastoreEnv, datastoreProject)
+    internal suspend fun initWithLocking(env: DatastoreEnv, project: String) =
+        Lock.withLock {
+            init(env, project)
         }
-        return this.env
+
+    private suspend fun maybeInitFromProcessEnv(): DatastoreEnvWithProject =
+        Lock.withLock {
+            if (!DBEnvAndProject::env.isInitialized) {
+                val datastoreEnvString = System.getenv(PROCESS_ENV_VAR)
+                    // TODO(colin): more specific exception class?
+                    ?: throw Exception(
+                        "You must provide a datastore environment. Either " +
+                            "call `DBEnv.init(env, project)` or set the " +
+                            "process environment variable $PROCESS_ENV_VAR.")
+                val validEnvStrings = DatastoreEnv.values().map { it.name }
+                if (datastoreEnvString !in validEnvStrings) {
+                    throw IllegalArgumentException(
+                        "$datastoreEnvString is not a valid environment. " +
+                            "Options are: $validEnvStrings"
+                    )
+                }
+                val datastoreEnv = DatastoreEnv.valueOf(datastoreEnvString)
+
+                val datastoreProject = System.getenv(PROCESS_PROJECT_ENV_VAR)
+                    ?: throw Exception(
+                        "You must provide a datastore project. Either call " +
+                            "`DBEnv.init(env, project)` or set the process " +
+                            "environment variable $PROCESS_PROJECT_ENV_VAR.")
+                init(datastoreEnv, datastoreProject)
+            }
+            DBEnvAndProject.env
+        }
+
+    internal fun getEnvAndProject(): DatastoreEnvWithProject {
+        // This check is redundant, but it allows us to avoid the extra
+        // overhead of firing off a coroutine every time we want to access the
+        // env after it's initialized, as well as the deadlock risk of using a
+        // `runBlocking` if this gets called from inside a coroutine.
+        // Note that the fact that we can do this without holding the lock
+        // depends on the fact that our setters for this.env, which do use the
+        // lock, enforce that we can only set this.env once per process.
+        if (this::env.isInitialized) {
+            return this.env
+        }
+        val deferredInit = InitializationScope.async {
+            maybeInitFromProcessEnv()
+        }
+        return runBlocking(InitializationScope.coroutineContext) {
+            deferredInit.await()
+        }
     }
 }
 
@@ -61,9 +116,14 @@ internal object DBEnvAndProject {
  *
  * If the environment has already been initialized, throw
  * IllegalStateException.
+ *
+ * This is a thread-blocking function.
  */
-fun initializeEnvAndProject(env: DatastoreEnv, project: String) =
-    DBEnvAndProject.init(env, project)
+fun initializeEnvAndProject(env: DatastoreEnv, project: String) {
+    runBlocking(InitializationScope.coroutineContext) {
+        DBEnvAndProject.initWithLocking(env, project)
+    }
+}
 
 /**
  * Wrapper for the Google cloud datastore client.
@@ -71,12 +131,13 @@ fun initializeEnvAndProject(env: DatastoreEnv, project: String) =
  * This allows us to share it across threads, even though the datastore context
  * must be thread local.
  */
-internal val datastoreClient: com.google.cloud.datastore.Datastore by lazy {
-    val envAndProject = DBEnvAndProject.getEnvAndProject()
-    DatastoreBackendService()
-        .backendForEnv(envAndProject.env)
-        .getDatastore(envAndProject)
-}
+private val datastoreClient: Deferred<com.google.cloud.datastore.Datastore> =
+    InitializationScope.async(start = CoroutineStart.LAZY) {
+        val envAndProject = DBEnvAndProject.getEnvAndProject()
+        DatastoreBackendService()
+            .backendForEnv(envAndProject.env)
+            .getDatastore(envAndProject)
+    }
 
 /**
  * Internal value for tracking datastore context.
@@ -110,6 +171,8 @@ internal val localDB: ThreadLocal<org.khanacademy.datastore.Datastore> =
  */
 val DB: org.khanacademy.datastore.Datastore
     get() =
-        // NOTE: DatastoreWithContext sets localDB in its constructor,
-        // so this persistently initializes the context if it's initially null.
-        localDB.get() ?: Datastore(datastoreClient)
+        // NOTE: Datastore sets localDB in its constructor, so this
+        // persistently initializes the context if it's initially null.
+        localDB.get() ?: runBlocking(InitializationScope.coroutineContext) {
+            Datastore(datastoreClient.await())
+        }

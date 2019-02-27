@@ -4,7 +4,7 @@ sealed class KeyIDOrName
 data class KeyID(val value: Long) : KeyIDOrName()
 data class KeyName(val value: String) : KeyIDOrName()
 
-typealias KeyPathElement = Pair<String, KeyIDOrName>
+data class KeyPathElement(val kind: String, val idOrName: KeyIDOrName)
 
 /**
  * Typed wrapper around a datastore key.
@@ -14,7 +14,8 @@ data class Key<T : Keyed<T>>(
     val idOrName: KeyIDOrName,
     val parentPath: List<KeyPathElement> = listOf()
 ) {
-    fun path(): List<KeyPathElement> = parentPath + (kind to idOrName)
+    fun path(): List<KeyPathElement> = parentPath +
+        KeyPathElement(kind, idOrName)
 
     constructor(
         kind: String,

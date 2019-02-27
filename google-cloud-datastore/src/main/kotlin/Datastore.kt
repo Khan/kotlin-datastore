@@ -56,16 +56,24 @@ inline fun <reified T : Keyed<T>> Datastore.getAsync(
 
 fun Datastore.inTransaction(): Boolean = clientOrTransaction is Transaction
 
-fun <T> Datastore.transactional(
-    block: Datastore.() -> T
-): T = transactional(TransactionOptions.DEFAULT, block)
-
+/**
+ * Run a function, with all contained datastore operations transactional.
+ *
+ * WARNING: currently if there are any async operations in the transaction,
+ * and you don't `.await()` them in the transaction, whether they
+ * participate in the transaction or not is undefined behavior.
+ * TODO(colin): we can probably do something clever with coroutine scopes
+ * to force ourselves to wait on them automatically.
+ *
+ * Note that clients must only use these extension methods for transactions,
+ * and they must not construct a transaction in any other way.
+ */
 fun <T> Datastore.transactional(
     options: TransactionOptions,
     block: Datastore.() -> T
 ): T = when {
     inTransaction() && options.propagationAllowed ->
-        with(this, block)
+        block()
     inTransaction() && !options.propagationAllowed ->
         throw IllegalStateException(
             "Nesting transactions is not allowed when propagationAllowed" +
@@ -92,7 +100,7 @@ fun <T> Datastore.transactional(
             Datastore(txn)
         }
         val deferredResult = context.async {
-            with(context, block)
+            context.block()
         }
         val result = runBlocking {
             deferredResult.await()
@@ -101,6 +109,15 @@ fun <T> Datastore.transactional(
         result
     }
 }
+
+/**
+ * Run datastore operations in a transaction with default options.
+ *
+ * @see transactional
+ */
+fun <T> Datastore.transactional(
+    block: Datastore.() -> T
+): T = transactional(TransactionOptions.DEFAULT, block)
 
 // TODO(colin): getMulti, all the various put() functions, and queries.
 
@@ -157,6 +174,7 @@ fun <T : Keyed<T>> internalGet(
 ): T? = datastore.clientOrTransaction
     .get(key.toDatastoreKey())
     ?.toTypedModel(tReference)
+
 /**
  * Internal Datastore.getAsync used as an inlining target.
  *

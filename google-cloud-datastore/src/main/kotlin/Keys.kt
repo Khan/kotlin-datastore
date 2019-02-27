@@ -61,9 +61,9 @@ fun <T : Keyed<T>> Key<T>.toDatastoreKey(): DatastoreKey {
 fun <T : Keyed<T>> DatastoreKey.toKey(): Key<T> = Key(
     parentPath = ancestors.map { pathElement ->
         if (pathElement.hasId()) {
-            pathElement.kind to KeyID(pathElement.id)
+            KeyPathElement(pathElement.kind, KeyID(pathElement.id))
         } else {
-            pathElement.kind to KeyName(pathElement.name)
+            KeyPathElement(pathElement.kind, KeyName(pathElement.name))
         }
     },
     kind = kind,

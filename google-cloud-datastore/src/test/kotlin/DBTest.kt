@@ -130,7 +130,7 @@ class DBTest : StringSpec({
             flag.get()
         }
         runBlocking {
-            val t2 = async {
+            val t2 = DB.async {
                 DB.transactional {
                     testTransaction = clientOrTransaction as Transaction
                     val firstOp = DB.getAsync(testModel1.key)
@@ -145,7 +145,7 @@ class DBTest : StringSpec({
                     }
                 }
             }
-            val t1 = async {
+            val t1 = DB.async {
                 DB.transactional {
                     otherTransaction = clientOrTransaction as Transaction
                     val op = DB.getAsync(testModel2.key)
