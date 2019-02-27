@@ -4,20 +4,38 @@
 package org.khanacademy.datastore
 
 import com.google.cloud.Timestamp
+import com.google.cloud.datastore.Blob
 import com.google.cloud.datastore.Entity
 import org.khanacademy.metadata.Keyed
 import org.khanacademy.metadata.Meta
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.ZoneOffset
+import kotlin.reflect.KAnnotatedElement
 import kotlin.reflect.KClass
+import kotlin.reflect.KFunction
 import kotlin.reflect.KParameter
+import kotlin.reflect.KProperty
 import kotlin.reflect.KType
 import kotlin.reflect.full.createType
+import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.full.findAnnotation
 import kotlin.reflect.full.primaryConstructor
 import kotlin.reflect.full.valueParameters
 import kotlin.reflect.full.withNullability
+
+/**
+ * Get the primary constructor for a class, asserting it has one.
+ */
+internal fun <T : Any> assertedPrimaryConstructor(
+    cls: KClass<T>
+): KFunction<T> {
+    return cls.primaryConstructor
+        ?: throw Exception(
+            "Entity must be represented by a data class with primary " +
+                "constructor")
+}
 
 /**
  * Convert a Google cloud datastore entity to one of our model classes.
@@ -29,10 +47,7 @@ import kotlin.reflect.full.withNullability
  * processors.
  */
 fun <T : Keyed<T>> Entity.toTypedModel(tRef: KClass<T>): T {
-    val constructor = tRef.primaryConstructor
-        ?: throw Exception(
-            "Entity must be represented by a data class with primary " +
-                "constructor")
+    val constructor = assertedPrimaryConstructor(tRef)
     val parameters = constructor.valueParameters
         .map { kParameter ->
             // TODO(colin): instead of hard-coding "key" we should use the name
@@ -55,18 +70,34 @@ fun <T : Keyed<T>> Entity.toTypedModel(tRef: KClass<T>): T {
     return constructor.callBy(parameters)
 }
 
+fun Keyed<*>.toDatastoreEntity(): Entity {
+    val properties = this::class.declaredMemberProperties
+
+    val entity = Entity.newBuilder(this.key.toDatastoreKey())
+
+    properties.filter { it.name != this::key.name }
+        .forEach { entity.setTypedProperty(it, this) }
+    return entity.build()
+}
+
 /**
  * Find the name for the given parameter in the datastore.
  *
  * Prefer a `@Meta(name = ...)` annotation if present; otherwise, fallback on
  * the name in code.
  */
-internal fun datastoreName(kParameter: KParameter): String? {
-    val annotName = kParameter.findAnnotation<Meta>()?.name
+internal fun datastoreName(kParameter: KParameter): String? =
+    metaAnnotationName(kParameter) ?: kParameter.name
+
+/**
+ * Read the name out of a @Meta annotation, if present.
+ */
+internal fun metaAnnotationName(element: KAnnotatedElement): String? {
+    val annotName = element.findAnnotation<Meta>()?.name
     return if (annotName != null && annotName != "") {
         annotName
     } else {
-        kParameter.name
+        null
     }
 }
 
@@ -172,4 +203,67 @@ internal fun Entity.getExistingTypedProperty(
         throw IllegalArgumentException(
             "Unable to use property $name of type $type as a datastore " +
                 "property")
+}
+
+/**
+ * Set the value of an entity's property, via its builder.
+ *
+ * TODO(colin): we'd like this to be parameterized by the model type too, but
+ * there's something subtle with type variance that's preventing us from doing
+ * that. Figure out why.
+ */
+internal fun <P> Entity.Builder.setTypedProperty(
+    property: KProperty<P>,
+    modelInstance: Keyed<*>
+) {
+    val propertyValue: P = property.call(modelInstance)
+
+    // We need to match this property up to the constructor parameters to allow
+    // for an API where we can just do `@Meta(name = "x")` instead of both
+    // `@param:Meta(...)` and `@property.Meta(...)` being required.
+    // (Annotations will only apply to one target by default if there are
+    // multiple valid ones, as there are in data class constructors.)
+    //
+    // The reason we need to deal with the constructor parameters at all rather
+    // than just having the annotation apply to the property, is that the
+    // `Datastore.get()` method needs to call the constructor reflectively
+    // using parameters, so to get the annotations there, we'd then just have
+    // to do the inverse matching to match property to constructor parameter.
+    //
+    // We also can't just assume that constructor parameters are the same as
+    // properties as we may have computed properties, which are stored in the
+    // datastore, but are not settable manually.
+    val parameter = assertedPrimaryConstructor(modelInstance::class)
+        .valueParameters.firstOrNull {
+            it.name == property.name
+        }
+    val name =
+        metaAnnotationName(property) // Only present on computed properties.
+            ?: parameter?.let(::datastoreName)
+            ?: property.name
+
+    when (propertyValue) {
+        is ByteArray -> set(name, Blob.copyFrom(propertyValue))
+        // Note that while the code looks identical for the primitive types, we
+        // have to duplicate them so that the compiler can choose the correct
+        // overloaded function based on type.
+        is Boolean -> set(name, propertyValue)
+        is Double -> set(name, propertyValue)
+        is Long -> set(name, propertyValue)
+        is String -> set(name, propertyValue)
+        is LocalDateTime -> {
+            val timestamp = Timestamp.ofTimeSecondsAndNanos(
+                propertyValue.toEpochSecond(ZoneOffset.UTC),
+                propertyValue.nano)
+            set(name, timestamp)
+        }
+        // TODO(colin): implement other property types (see
+        // getExistingTypedProperty for more detail)
+        // TODO(colin): we may want this to actually set `null` in the
+        // datastore when implementing default values for properties.
+        null -> Unit
+        else ->
+            throw IllegalArgumentException(
+                "Unable to store property $name in the datastore")
+    }
 }

@@ -50,6 +50,7 @@ import org.khanacademy.datastore.DatastoreBackend
 import org.khanacademy.datastore.DatastoreEnv
 import org.khanacademy.datastore.DatastoreEnvWithProject
 import org.khanacademy.datastore.restoreLocalDBAfter
+import org.khanacademy.datastore.toDatastoreEntity
 import org.khanacademy.metadata.Keyed
 
 /**
@@ -181,16 +182,29 @@ class DatastoreTestStub : DatastoreBackend {
  * TODO(colin): this doesn't support the full set of datastore operations yet.
  * Fill this in as more functionality is implemented. For now this will throw
  * on any unimplemented operations.
+ *
+ * TODO(colin): we'll want to do some synchronization around updating the
+ * internal state.
  */
-class MockDatastore(val entities: List<Entity>) : ThrowingDatastore() {
+class MockDatastore(private var entities: List<Entity>) : ThrowingDatastore() {
     override fun get(key: Key?): Entity? =
         entities.firstOrNull { it.key == key }
+
+    override fun put(entity: FullEntity<*>?): Entity {
+        val entityConverted = entity as Entity
+        entities += entityConverted
+        return entityConverted
+    }
 }
 
+/**
+ * Within a block of code, mock the datastore to contain the provided objects.
+ */
 fun <T> withMockDatastore(
     vararg entities: Keyed<*>, block: () -> T
 ): T {
-    TODO("Not yet implemented, use the Entity version instead")
+    val converted = entities.map { it.toDatastoreEntity() }.toTypedArray()
+    return withMockDatastore(*converted, block = block)
 }
 
 /**

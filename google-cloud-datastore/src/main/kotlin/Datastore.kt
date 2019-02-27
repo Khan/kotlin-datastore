@@ -54,6 +54,20 @@ inline fun <reified T : Keyed<T>> Datastore.getAsync(
     key: Key<T>
 ): Deferred<T?> = internalGetAsync(this, key, T::class)
 
+/**
+ * Synchronous put of an object to the datastore.
+ */
+fun <T : Keyed<T>> Datastore.put(modelInstance: Keyed<T>): Key<T> =
+    this.clientOrTransaction.put(modelInstance.toDatastoreEntity()).key.toKey()
+
+/**
+ * Asynchronous put of an object to the datastore.
+ */
+fun <T : Keyed<T>> Datastore.putAsync(
+    modelInstance: Keyed<T>
+): Deferred<Key<T>> =
+    DB.async { put(modelInstance) }
+
 fun Datastore.inTransaction(): Boolean = clientOrTransaction is Transaction
 
 /**

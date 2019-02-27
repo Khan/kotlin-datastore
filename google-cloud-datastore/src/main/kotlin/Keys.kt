@@ -47,7 +47,7 @@ internal fun keyPathElementToDatastoreKey(
 /**
  * Convert our abstract keys to the Google cloud datastore key class.
  */
-fun <T : Keyed<T>> Key<T>.toDatastoreKey(): DatastoreKey {
+fun Key<*>.toDatastoreKey(): DatastoreKey {
     val rootPath = path().first()
     val remainingPath = path().drop(1)
     return remainingPath.fold(

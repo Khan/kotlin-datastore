@@ -13,6 +13,7 @@ import org.khanacademy.metadata.Keyed
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.ZoneOffset
 
 data class PrimitiveTestModel(
     val aString: String?,
@@ -23,6 +24,14 @@ data class PrimitiveTestModel(
     val aTimestamp: LocalDateTime?,
     override val key: Key<PrimitiveTestModel>
 ) : Keyed<PrimitiveTestModel>
+
+data class ComputedTestModel(
+    val aString: String,
+    override val key: Key<ComputedTestModel>
+) : Keyed<ComputedTestModel> {
+    val computed1 = aString + "_first"
+    val computed2 = aString + "_second"
+}
 
 class EntityConversionTest : StringSpec({
     "It should correctly convert basic fields" {
@@ -119,5 +128,57 @@ class EntityConversionTest : StringSpec({
             .build()
         val converted = entity.toTypedModel(PrimitiveTestModel::class)
         converted.aString shouldBe null
+    }
+
+    "It should correctly transfer basic fields to the entity" {
+        val testKey = Key<PrimitiveTestModel>(
+            "PrimitiveTestModel", "the-first-one")
+        val testModel = PrimitiveTestModel(
+            aString = "string_value",
+            aLong = 4L,
+            aBool = true,
+            aDouble = 9.0,
+            someBytes = "byte_value".toByteArray(),
+            aTimestamp = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC),
+            key = testKey)
+
+        val entity = testModel.toDatastoreEntity()
+        entity.getString("aString") shouldBe "string_value"
+        entity.getLong("aLong") shouldBe 4L
+        entity.getBoolean("aBool") shouldBe true
+        entity.getDouble("aDouble") shouldBe 9.0
+        String(entity.getBlob("someBytes").toByteArray()) shouldBe "byte_value"
+        entity.getTimestamp("aTimestamp").seconds shouldBe 0
+        entity.key.kind shouldBe "PrimitiveTestModel"
+        entity.key.name shouldBe "the-first-one"
+    }
+
+    "It will skip null when transferring to the entity" {
+        val testKey = Key<PrimitiveTestModel>(
+            "PrimitiveTestModel", "the-first-one")
+        val testModel = PrimitiveTestModel(
+            aString = null,
+            aLong = 4L,
+            aBool = true,
+            aDouble = 9.0,
+            someBytes = "byte_value".toByteArray(),
+            aTimestamp = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC),
+            key = testKey)
+
+        val entity = testModel.toDatastoreEntity()
+        ("aString" in entity) shouldBe false
+    }
+
+    "It will transfer computed properties to the entity" {
+        val testKey = Key<ComputedTestModel>(
+            "ComputedTestModel", "the-first-one")
+        val testModel = ComputedTestModel(
+            aString = "a_string_value",
+            key = testKey
+        )
+
+        val entity = testModel.toDatastoreEntity()
+        entity.getString("computed1") shouldBe "a_string_value_first"
+        entity.getString("computed2") shouldBe "a_string_value_second"
     }
 })

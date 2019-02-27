@@ -14,6 +14,15 @@ data class AnnotationTestModel(
     override val key: Key<AnnotationTestModel>
 ) : Keyed<AnnotationTestModel>
 
+data class ComputedAnnotationTestModel(
+    val aString: String,
+    override val key: Key<ComputedAnnotationTestModel>
+) : Keyed<ComputedAnnotationTestModel> {
+
+    @Meta(name = "computed_property")
+    val computedProperty = aString + "_computed"
+}
+
 class ModelAnnotationTest : StringSpec({
     "When converting from an Entity, it should use the annotated name" {
         val datastoreKey = DatastoreKey.newBuilder(
@@ -35,5 +44,31 @@ class ModelAnnotationTest : StringSpec({
         shouldThrow<NullPointerException> {
             entity.toTypedModel(AnnotationTestModel::class)
         }
+    }
+
+    "When converting to an Entity, it should use the annotated name" {
+        val key = Key<AnnotationTestModel>(
+            "AnnotatedTestModel", "the-first-one")
+        val model = AnnotationTestModel(
+            aString = "abcd",
+            key = key
+        )
+
+        val entity = model.toDatastoreEntity()
+        entity.getString("a_string") shouldBe "abcd"
+        ("aString" in entity) shouldBe false
+    }
+
+    "It should use the annotated name for computed properties" {
+        val key = Key<ComputedAnnotationTestModel>(
+            "ComputedAnnotationTestModel", "the-first-one")
+        val model = ComputedAnnotationTestModel(
+            aString = "abcd",
+            key = key
+        )
+
+        val entity = model.toDatastoreEntity()
+        entity.getString("computed_property") shouldBe "abcd_computed"
+        ("computedProperty" in entity) shouldBe false
     }
 })
