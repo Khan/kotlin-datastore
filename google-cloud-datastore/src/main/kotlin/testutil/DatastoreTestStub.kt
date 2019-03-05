@@ -34,8 +34,10 @@
 package org.khanacademy.datastore.testutil
 
 import com.google.cloud.datastore.Batch
+import com.google.cloud.datastore.Cursor
 import com.google.cloud.datastore.Datastore
 import com.google.cloud.datastore.DatastoreOptions
+import com.google.cloud.datastore.DatastoreTypeConverter
 import com.google.cloud.datastore.Entity
 import com.google.cloud.datastore.FullEntity
 import com.google.cloud.datastore.IncompleteKey
@@ -44,11 +46,17 @@ import com.google.cloud.datastore.KeyFactory
 import com.google.cloud.datastore.Query
 import com.google.cloud.datastore.QueryResults
 import com.google.cloud.datastore.ReadOption
+import com.google.cloud.datastore.StructuredQuery
 import com.google.cloud.datastore.Transaction
+import com.google.datastore.v1.PropertyFilter
 import com.google.datastore.v1.TransactionOptions
+import com.google.datastore.v1.Value
+import com.google.protobuf.NullValue
+import com.google.protobuf.Timestamp
 import org.khanacademy.datastore.DatastoreBackend
 import org.khanacademy.datastore.DatastoreEnv
 import org.khanacademy.datastore.DatastoreEnvWithProject
+import org.khanacademy.datastore.DatastoreKey
 import org.khanacademy.datastore.restoreLocalDBAfter
 import org.khanacademy.datastore.toDatastoreEntity
 import org.khanacademy.metadata.Keyed
@@ -177,6 +185,99 @@ class DatastoreTestStub : DatastoreBackend {
 }
 
 /**
+ * Implementation of java.lang.Comparable for Timestamps.
+ */
+internal fun Timestamp.compareTo(other: Timestamp): Int {
+    val resultToSeconds = this.seconds.compareTo(other.seconds)
+    return if (resultToSeconds == 0) {
+        this.nanos.compareTo(other.nanos)
+    } else {
+        resultToSeconds
+    }
+}
+
+/**
+ * Implementation of java.lang.Comparable for Values, used in query conditions.
+ *
+ * We assume that both values are of the same type.
+ */
+internal operator fun Value.compareTo(other: Value): Int {
+    return when (valueTypeCase) {
+        Value.ValueTypeCase.NULL_VALUE -> 0
+        Value.ValueTypeCase.BOOLEAN_VALUE ->
+            this.booleanValue.compareTo(other.booleanValue)
+        Value.ValueTypeCase.INTEGER_VALUE ->
+            this.integerValue.compareTo(other.integerValue)
+        Value.ValueTypeCase.DOUBLE_VALUE ->
+            this.doubleValue.compareTo(other.doubleValue)
+        Value.ValueTypeCase.TIMESTAMP_VALUE ->
+            this.timestampValue.compareTo(other.timestampValue)
+        Value.ValueTypeCase.KEY_VALUE ->
+            TODO("Implement querying by keys")
+        Value.ValueTypeCase.STRING_VALUE ->
+            this.stringValue.compareTo(other.stringValue)
+        Value.ValueTypeCase.BLOB_VALUE ->
+            throw IllegalArgumentException(
+                "Cannot query on blob values.")
+        Value.ValueTypeCase.GEO_POINT_VALUE ->
+            TODO("Implement geo point properties")
+        Value.ValueTypeCase.ENTITY_VALUE ->
+            TODO("Implement entity properties")
+        Value.ValueTypeCase.ARRAY_VALUE ->
+            TODO("Implement repeated properties")
+        Value.ValueTypeCase.VALUETYPE_NOT_SET, null ->
+            throw IllegalArgumentException(
+                "Cannot query on values of unknown type.")
+    }
+}
+
+/**
+ * Does the provided entity match the given filter?
+ *
+ * We treat missing values on the entity as `null`.
+ */
+internal fun entityMatches(entity: Entity, filter: PropertyFilter): Boolean {
+    val name = filter.property.name
+    val filterValue = filter.value
+    val entityValue = DatastoreTypeConverter.entityToPb(entity)
+        .propertiesMap[name]
+        ?: Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build()
+
+    // TODO(colin): when implementing repeated values, we'll need to take that
+    // into account here.
+
+    // TODO(colin): should we throw here? This probably represents a
+    // programming error if we hit this condition?
+    if (filterValue.valueTypeCase != entityValue.valueTypeCase) {
+        return false
+    }
+
+    return when (filter.op) {
+        PropertyFilter.Operator.EQUAL ->
+            // Note that we're not using the == operator because the ordering
+            // we're using here is not guaranteed to match the behavior of
+            // equals. (In particular some types may use object identity, which
+            // we don't want.)
+            entityValue.compareTo(filterValue) == 0
+        PropertyFilter.Operator.GREATER_THAN ->
+            entityValue > filterValue
+        PropertyFilter.Operator.GREATER_THAN_OR_EQUAL ->
+            entityValue >= filterValue
+        PropertyFilter.Operator.LESS_THAN ->
+            entityValue < filterValue
+        PropertyFilter.Operator.LESS_THAN_OR_EQUAL ->
+            entityValue <= filterValue
+        PropertyFilter.Operator.HAS_ANCESTOR ->
+            TODO("Implement ancestor queries.")
+        PropertyFilter.Operator.OPERATOR_UNSPECIFIED,
+        PropertyFilter.Operator.UNRECOGNIZED,
+        null ->
+            throw IllegalArgumentException(
+                "Cannot run a query with unspecified operator.")
+    }
+}
+
+/**
  * Datastore implementation that uses a list of entities as its fake contents.
  *
  * TODO(colin): this doesn't support the full set of datastore operations yet.
@@ -195,6 +296,66 @@ class MockDatastore(private var entities: List<Entity>) : ThrowingDatastore() {
         entities += entityConverted
         return entityConverted
     }
+
+    private fun runEntities(query: Query<*>?): List<Entity> {
+        val structuredQuery = query as? StructuredQuery<*>
+            ?: throw NotImplementedError(
+                "Only structured queries are implemented in the test stub.")
+        val filter = DatastoreTypeConverter.filterToPb(structuredQuery.filter)
+        // TODO(colin): this only handles a top-level composite filter, which
+        // is all our query code will currently generate. But probably better
+        // to enforce this somehow?
+        val allFilters = if (filter.hasCompositeFilter()) {
+            filter.compositeFilter.filtersList.map { it.propertyFilter }
+        } else {
+            listOf(filter.propertyFilter)
+        }
+
+        return entities.filter { entity ->
+            allFilters.all { filter ->
+                entityMatches(entity, filter)
+            }
+        }
+    }
+
+    private fun runKeys(query: Query<*>?): List<DatastoreKey> =
+        runEntities(query).map { it.key }
+
+    @Suppress("UNCHECKED_CAST")
+    override fun <T> run(query: Query<T>?): QueryResults<T> {
+        val resultType = DatastoreTypeConverter.queryResultType(query)
+        return when (resultType) {
+            Query.ResultType.ENTITY ->
+                MockQueryResults(runEntities(query))
+            Query.ResultType.KEY ->
+                MockQueryResults(runKeys(query))
+            else ->
+                throw NotImplementedError(
+                    "Only entity and key queries are supported.")
+        } as QueryResults<T>
+    }
+
+    companion object {
+        class MockQueryResults<T>(
+            private val results: List<T>
+        ) : QueryResults<T>, Iterator<T> by results.iterator() {
+            override fun getSkippedResults(): Int {
+                throw NotImplementedError("Not implemented in the test stub.")
+            }
+
+            override fun getCursorAfter(): Cursor {
+                throw NotImplementedError("Not implemented in the test stub.")
+            }
+
+            override fun remove() {
+                throw NotImplementedError("Not implemented in the test stub.")
+            }
+
+            override fun getResultClass(): Class<*> {
+                throw NotImplementedError("Not implemented in the test stub.")
+            }
+        }
+    }
 }
 
 /**
@@ -206,6 +367,13 @@ fun <T> withMockDatastore(
     val converted = entities.map { it.toDatastoreEntity() }.toTypedArray()
     return withMockDatastore(*converted, block = block)
 }
+
+/**
+ * Within a block of code, mock the datastore to contain the provided objects.
+ */
+fun <T> withMockDatastore(
+    entities: Collection<Keyed<*>>, block: () -> T
+) = withMockDatastore(*entities.toTypedArray(), block = block)
 
 /**
  * Within a block of code, mock the datastore to contain the provided entities.

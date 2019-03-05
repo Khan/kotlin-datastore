@@ -6,6 +6,8 @@
 package org.khanacademy.datastore
 
 import com.google.cloud.datastore.DatastoreReaderWriter
+import com.google.cloud.datastore.Query
+import com.google.cloud.datastore.StructuredQuery
 import com.google.cloud.datastore.Transaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -69,6 +71,62 @@ fun <T : Keyed<T>> Datastore.putAsync(
     DB.async { put(modelInstance) }
 
 fun Datastore.inTransaction(): Boolean = clientOrTransaction is Transaction
+
+/**
+ * Query for objects matching all the given filters.
+ *
+ * For technical reasons, this is implemented out of line, below.
+ */
+inline fun <reified T : Keyed<T>> Datastore.query(
+    kind: String, vararg filters: QueryFilter
+): Sequence<T> = internalQuery(this, kind, filters.toList(), T::class)
+
+/**
+ * Query DSL for all objects matching the given filters.
+ *
+ * Within the provided block, specify expressions consisting of the (string)
+ * name of the property on which you're querying, an infix operator (one of eq,
+ * lt, gt, le, ge), and the value you wish to compare against.
+ *
+ * The query will consist of an `and` of all such conditions.
+ *
+ * Usage example:
+ *
+ * DB.query<SomeModelClass> {
+ *     "aProperty" eq 3
+ *     "somethingElse" lt "abcd"
+ * }
+ *
+ */
+inline fun <reified T : Keyed<T>> Datastore.query(
+    kind: String, builderBlock: QueryFilterBuilder.() -> Any?
+): Sequence<T> {
+    val builder = QueryFilterBuilder()
+    builder.builderBlock()
+    return this.query(kind, *(builder.build().toTypedArray()))
+}
+
+/**
+ * Query for keys matching all the given filters.
+ *
+ * For technical reasons, this is implemented out of line, below.
+ */
+fun <T : Keyed<T>> Datastore.keysOnlyQuery(
+    kind: String, vararg filters: QueryFilter
+): Sequence<Key<T>> = internalKeysOnlyQuery<T>(this, kind, filters.toList())
+
+/**
+ * Query DSL for all keys corresponding to the given filters.
+ *
+ * @see query for usage information
+ */
+fun <T : Keyed<T>> Datastore.keysOnlyQuery(
+    kind: String, builderBlock: QueryFilterBuilder.() -> Any?
+): Sequence<Key<T>> {
+    val builder = QueryFilterBuilder()
+    builder.builderBlock()
+    return this.keysOnlyQuery(kind, *(builder.build().toTypedArray()))
+}
 
 /**
  * Run a function, with all contained datastore operations transactional.
@@ -212,4 +270,68 @@ internal fun <T> restoreLocalDBAfter(block: () -> T): T {
     } finally {
         localDB.set(origLocalDB)
     }
+}
+
+/**
+ * Convert our filters to a single possibly composite datastore client filter.
+ *
+ * Throw if the list of filters is empty.
+ */
+internal fun convertDatastoreFilters(
+    filters: List<QueryFilter>
+): StructuredQuery.Filter {
+    val datastoreFilters = filters.map { it.toDatastoreFilter() }
+    return when (datastoreFilters.size) {
+        0 -> throw IllegalArgumentException(
+            "You must provide at least one query filter.")
+        1 -> datastoreFilters[0]
+        else ->
+            // .and() takes one required filter and varargs with any number of
+            // additional filters. Therefore we need to pass the first filter
+            // separately from the rest of them here.
+            StructuredQuery.CompositeFilter.and(
+                datastoreFilters[0],
+                *datastoreFilters.drop(1).toTypedArray()
+            )
+    }
+}
+
+/**
+ * Internal Datastore.query used as an inlining target
+ *
+ * @suppress
+ */
+fun <T : Keyed<T>> internalQuery(
+    datastore: Datastore,
+    kind: String,
+    filters: List<QueryFilter>, tReference: KClass<T>
+): Sequence<T> {
+    val filter = convertDatastoreFilters(filters)
+    val query = Query.newEntityQueryBuilder()
+        .setKind(kind)
+        .setFilter(filter)
+        .build()
+    val result = datastore.clientOrTransaction.run(query)
+    return result.asSequence()
+        .map { entity -> entity.toTypedModel(tReference) }
+}
+
+/**
+ * Internal Datastore.keysOnlyQuery used as an inlining target
+ *
+ * @suppress
+ */
+fun <T : Keyed<T>> internalKeysOnlyQuery(
+    datastore: Datastore,
+    kind: String,
+    filters: List<QueryFilter>
+): Sequence<Key<T>> {
+    val filter = convertDatastoreFilters(filters)
+    val query = Query.newKeyQueryBuilder()
+        .setKind(kind)
+        .setFilter(filter)
+        .build()
+    val result = datastore.clientOrTransaction.run(query)
+    return result.asSequence()
+        .map { key -> key.toKey<T>() }
 }
