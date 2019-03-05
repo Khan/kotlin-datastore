@@ -31,11 +31,11 @@ Functionality planned prior to a first release:
 - [x] Transactions
 - [x] Asynchronous operation (via kotlin coroutines)
 - [ ] Datastore queries (via a `Map`-like interface)
-- [ ] Datastore writes
+- [x] Datastore writes
 - [ ] multi-get and -put
 - [x] Use of plain kotlin data classes to represent datstore models
 - [x] Reflective implementation of converting Google datastore client `Entity`s to data class instances
-- [ ] Reflective implementation of converting data class instances to Google datastore client `Entity`s
+- [x] Reflective implementation of converting data class instances to Google datastore client `Entity`s
 - [x] Annotations for assigning a different in-datastore name to a property
 - [ ] Annotations for choosing whether to index a property
 - [x] Primitive, nonrepeated properties
@@ -45,11 +45,12 @@ Functionality planned prior to a first release:
 - [ ] Key properties
 - [ ] Location properties
 - [ ] Json properties
+- [x] Computed properties
 - [ ] Other miscellaneous property types (in general we plan to support equivalents of the
       standard ndb property types at
       https://cloud.google.com/appengine/docs/standard/python/ndb/entity-property-reference#properties_and_value_types)
 - [x] Backend using the google-cloud-java datastore client
-- [ ] Test stub backend
+- [x] Test stub backend
 
 Functionality planned after a first release:
 
