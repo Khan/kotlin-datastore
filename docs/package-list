@@ -2,4 +2,5 @@ $dokka.format:html
 $dokka.linkExtension:html
 
 org.khanacademy.datastore
+org.khanacademy.datastore.testutil
 org.khanacademy.metadata

@@ -1,0 +1,58 @@
+<HTML>
+<HEAD>
+<meta charset="UTF-8">
+<title>org.khanacademy.datastore.testutil - kotlin-datastore</title>
+<link rel="stylesheet" href="../../style.css">
+</HEAD>
+<BODY>
+<a href="../index.html">kotlin-datastore</a>&nbsp;/&nbsp;<a href="./index.html">org.khanacademy.datastore.testutil</a><br/>
+<br/>
+<h2>Package org.khanacademy.datastore.testutil</h2>
+<h3>Types</h3>
+<table>
+<tbody>
+<tr>
+<td>
+<p><a href="-datastore-test-stub/index.html">DatastoreTestStub</a></p>
+</td>
+<td>
+<code><span class="keyword">class </span><span class="identifier">DatastoreTestStub</span>&nbsp;<span class="symbol">:</span>&nbsp;<a href="../org.khanacademy.datastore/-datastore-backend/index.html"><span class="identifier">DatastoreBackend</span></a></code></td>
+</tr>
+<tr>
+<td>
+<p><a href="-mock-datastore/index.html">MockDatastore</a></p>
+</td>
+<td>
+<code><span class="keyword">class </span><span class="identifier">MockDatastore</span>&nbsp;<span class="symbol">:</span>&nbsp;<a href="-throwing-datastore/index.html"><span class="identifier">ThrowingDatastore</span></a></code>
+<p>Datastore implementation that uses a list of entities as its fake contents.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><a href="-throwing-datastore/index.html">ThrowingDatastore</a></p>
+</td>
+<td>
+<code><span class="keyword">open</span> <span class="keyword">class </span><span class="identifier">ThrowingDatastore</span></code>
+<p>An implementation of Google's <code>Datastore</code> that throws on all methods.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3>Functions</h3>
+<table>
+<tbody>
+<tr>
+<td>
+<p><a href="with-mock-datastore.html">withMockDatastore</a></p>
+</td>
+<td>
+<code><span class="keyword">fun </span><span class="symbol">&lt;</span><span class="identifier">T</span><span class="symbol">&gt;</span> <span class="identifier">withMockDatastore</span><span class="symbol">(</span><span class="keyword">vararg</span> <span class="identifier" id="org.khanacademy.datastore.testutil$withMockDatastore(kotlin.Array((org.khanacademy.metadata.Keyed(()))), kotlin.Function0((org.khanacademy.datastore.testutil.withMockDatastore.T)))/entities">entities</span><span class="symbol">:</span>&nbsp;<a href="../org.khanacademy.metadata/-keyed/index.html"><span class="identifier">Keyed</span></a><span class="symbol">&lt;</span><span class="identifier">*</span><span class="symbol">&gt;</span><span class="symbol">, </span><span class="identifier" id="org.khanacademy.datastore.testutil$withMockDatastore(kotlin.Array((org.khanacademy.metadata.Keyed(()))), kotlin.Function0((org.khanacademy.datastore.testutil.withMockDatastore.T)))/block">block</span><span class="symbol">:</span>&nbsp;<span class="symbol">(</span><span class="symbol">)</span>&nbsp;<span class="symbol">-&gt;</span>&nbsp;<a href="with-mock-datastore.html#T"><span class="identifier">T</span></a><span class="symbol">)</span><span class="symbol">: </span><a href="with-mock-datastore.html#T"><span class="identifier">T</span></a></code>
+<p>Within a block of code, mock the datastore to contain the provided objects.</p>
+<code><span class="keyword">fun </span><span class="symbol">&lt;</span><span class="identifier">T</span><span class="symbol">&gt;</span> <span class="identifier">withMockDatastore</span><span class="symbol">(</span><span class="keyword">vararg</span> <span class="identifier" id="org.khanacademy.datastore.testutil$withMockDatastore(kotlin.Array(()), kotlin.Function0((org.khanacademy.datastore.testutil.withMockDatastore.T)))/entities">entities</span><span class="symbol">:</span>&nbsp;<span class="identifier">&lt;ERROR CLASS&gt;</span><span class="symbol">, </span><span class="identifier" id="org.khanacademy.datastore.testutil$withMockDatastore(kotlin.Array(()), kotlin.Function0((org.khanacademy.datastore.testutil.withMockDatastore.T)))/block">block</span><span class="symbol">:</span>&nbsp;<span class="symbol">(</span><span class="symbol">)</span>&nbsp;<span class="symbol">-&gt;</span>&nbsp;<a href="with-mock-datastore.html#T"><span class="identifier">T</span></a><span class="symbol">)</span><span class="symbol">: </span><a href="with-mock-datastore.html#T"><span class="identifier">T</span></a></code>
+<p>Within a block of code, mock the datastore to contain the provided entities.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</BODY>
+</HTML>

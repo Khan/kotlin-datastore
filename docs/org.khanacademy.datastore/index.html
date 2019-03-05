@@ -130,6 +130,49 @@
 </tr>
 <tr>
 <td>
+<p><a href="put.html">put</a></p>
+</td>
+<td>
+<code><span class="keyword">fun </span><span class="symbol">&lt;</span><span class="identifier">T</span>&nbsp;<span class="symbol">:</span>&nbsp;<a href="../org.khanacademy.metadata/-keyed/index.html"><span class="identifier">Keyed</span></a><span class="symbol">&lt;</span><a href="put.html#T"><span class="identifier">T</span></a><span class="symbol">&gt;</span><span class="symbol">&gt;</span> <a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="identifier">put</span><span class="symbol">(</span><span class="identifier" id="org.khanacademy.datastore$put(org.khanacademy.datastore.Datastore, org.khanacademy.metadata.Keyed((org.khanacademy.datastore.put.T)))/modelInstance">modelInstance</span><span class="symbol">:</span>&nbsp;<a href="../org.khanacademy.metadata/-keyed/index.html"><span class="identifier">Keyed</span></a><span class="symbol">&lt;</span><a href="put.html#T"><span class="identifier">T</span></a><span class="symbol">&gt;</span><span class="symbol">)</span><span class="symbol">: </span><a href="../org.khanacademy.metadata/-key/index.html"><span class="identifier">Key</span></a><span class="symbol">&lt;</span><a href="put.html#T"><span class="identifier">T</span></a><span class="symbol">&gt;</span></code>
+<p>Synchronous put of an object to the datastore.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><a href="put-async.html">putAsync</a></p>
+</td>
+<td>
+<code><span class="keyword">fun </span><span class="symbol">&lt;</span><span class="identifier">T</span>&nbsp;<span class="symbol">:</span>&nbsp;<a href="../org.khanacademy.metadata/-keyed/index.html"><span class="identifier">Keyed</span></a><span class="symbol">&lt;</span><a href="put-async.html#T"><span class="identifier">T</span></a><span class="symbol">&gt;</span><span class="symbol">&gt;</span> <a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="identifier">putAsync</span><span class="symbol">(</span><span class="identifier" id="org.khanacademy.datastore$putAsync(org.khanacademy.datastore.Datastore, org.khanacademy.metadata.Keyed((org.khanacademy.datastore.putAsync.T)))/modelInstance">modelInstance</span><span class="symbol">:</span>&nbsp;<a href="../org.khanacademy.metadata/-keyed/index.html"><span class="identifier">Keyed</span></a><span class="symbol">&lt;</span><a href="put-async.html#T"><span class="identifier">T</span></a><span class="symbol">&gt;</span><span class="symbol">)</span><span class="symbol">: </span><span class="identifier">&lt;ERROR CLASS&gt;</span><span class="symbol">&lt;</span><a href="../org.khanacademy.metadata/-key/index.html"><span class="identifier">Key</span></a><span class="symbol">&lt;</span><a href="put-async.html#T"><span class="identifier">T</span></a><span class="symbol">&gt;</span><span class="symbol">&gt;</span></code>
+<p>Asynchronous put of an object to the datastore.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><a href="to-datastore-entity.html">toDatastoreEntity</a></p>
+</td>
+<td>
+<code><span class="keyword">fun </span><a href="../org.khanacademy.metadata/-keyed/index.html"><span class="identifier">Keyed</span></a><span class="symbol">&lt;</span><span class="identifier">*</span><span class="symbol">&gt;</span><span class="symbol">.</span><span class="identifier">toDatastoreEntity</span><span class="symbol">(</span><span class="symbol">)</span><span class="symbol">: </span><span class="identifier">&lt;ERROR CLASS&gt;</span></code></td>
+</tr>
+<tr>
+<td>
+<p><a href="to-datastore-key.html">toDatastoreKey</a></p>
+</td>
+<td>
+<code><span class="keyword">fun </span><a href="../org.khanacademy.metadata/-key/index.html"><span class="identifier">Key</span></a><span class="symbol">&lt;</span><span class="identifier">*</span><span class="symbol">&gt;</span><span class="symbol">.</span><span class="identifier">toDatastoreKey</span><span class="symbol">(</span><span class="symbol">)</span><span class="symbol">: </span><span class="identifier">&lt;ERROR CLASS&gt;</span></code>
+<p>Convert our abstract keys to the Google cloud datastore key class.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><a href="to-key.html">toKey</a></p>
+</td>
+<td>
+<code><span class="keyword">fun </span><span class="symbol">&lt;</span><span class="identifier">T</span>&nbsp;<span class="symbol">:</span>&nbsp;<a href="../org.khanacademy.metadata/-keyed/index.html"><span class="identifier">Keyed</span></a><span class="symbol">&lt;</span><a href="to-key.html#T"><span class="identifier">T</span></a><span class="symbol">&gt;</span><span class="symbol">&gt;</span> <span class="identifier">&lt;ERROR CLASS&gt;</span><span class="symbol">.</span><span class="identifier">toKey</span><span class="symbol">(</span><span class="symbol">)</span><span class="symbol">: </span><a href="../org.khanacademy.metadata/-key/index.html"><span class="identifier">Key</span></a><span class="symbol">&lt;</span><a href="to-key.html#T"><span class="identifier">T</span></a><span class="symbol">&gt;</span></code>
+<p>Convert a Google cloud datstore key to our abstract key class.</p>
+</td>
+</tr>
+<tr>
+<td>
 <p><a href="to-typed-model.html">toTypedModel</a></p>
 </td>
 <td>
@@ -142,8 +185,11 @@
 <p><a href="transactional.html">transactional</a></p>
 </td>
 <td>
-<code><span class="keyword">fun </span><span class="symbol">&lt;</span><span class="identifier">T</span><span class="symbol">&gt;</span> <a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="identifier">transactional</span><span class="symbol">(</span><span class="identifier" id="org.khanacademy.datastore$transactional(org.khanacademy.datastore.Datastore, kotlin.Function1((org.khanacademy.datastore.Datastore, org.khanacademy.datastore.transactional.T)))/block">block</span><span class="symbol">:</span>&nbsp;<a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="symbol">(</span><span class="symbol">)</span>&nbsp;<span class="symbol">-&gt;</span>&nbsp;<a href="transactional.html#T"><span class="identifier">T</span></a><span class="symbol">)</span><span class="symbol">: </span><a href="transactional.html#T"><span class="identifier">T</span></a></code><br/>
-<code><span class="keyword">fun </span><span class="symbol">&lt;</span><span class="identifier">T</span><span class="symbol">&gt;</span> <a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="identifier">transactional</span><span class="symbol">(</span><span class="identifier" id="org.khanacademy.datastore$transactional(org.khanacademy.datastore.Datastore, org.khanacademy.datastore.TransactionOptions, kotlin.Function1((org.khanacademy.datastore.Datastore, org.khanacademy.datastore.transactional.T)))/options">options</span><span class="symbol">:</span>&nbsp;<a href="-transaction-options/index.html"><span class="identifier">TransactionOptions</span></a><span class="symbol">, </span><span class="identifier" id="org.khanacademy.datastore$transactional(org.khanacademy.datastore.Datastore, org.khanacademy.datastore.TransactionOptions, kotlin.Function1((org.khanacademy.datastore.Datastore, org.khanacademy.datastore.transactional.T)))/block">block</span><span class="symbol">:</span>&nbsp;<a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="symbol">(</span><span class="symbol">)</span>&nbsp;<span class="symbol">-&gt;</span>&nbsp;<a href="transactional.html#T"><span class="identifier">T</span></a><span class="symbol">)</span><span class="symbol">: </span><a href="transactional.html#T"><span class="identifier">T</span></a></code></td>
+<code><span class="keyword">fun </span><span class="symbol">&lt;</span><span class="identifier">T</span><span class="symbol">&gt;</span> <a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="identifier">transactional</span><span class="symbol">(</span><span class="identifier" id="org.khanacademy.datastore$transactional(org.khanacademy.datastore.Datastore, org.khanacademy.datastore.TransactionOptions, kotlin.Function1((org.khanacademy.datastore.Datastore, org.khanacademy.datastore.transactional.T)))/options">options</span><span class="symbol">:</span>&nbsp;<a href="-transaction-options/index.html"><span class="identifier">TransactionOptions</span></a><span class="symbol">, </span><span class="identifier" id="org.khanacademy.datastore$transactional(org.khanacademy.datastore.Datastore, org.khanacademy.datastore.TransactionOptions, kotlin.Function1((org.khanacademy.datastore.Datastore, org.khanacademy.datastore.transactional.T)))/block">block</span><span class="symbol">:</span>&nbsp;<a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="symbol">(</span><span class="symbol">)</span>&nbsp;<span class="symbol">-&gt;</span>&nbsp;<a href="transactional.html#T"><span class="identifier">T</span></a><span class="symbol">)</span><span class="symbol">: </span><a href="transactional.html#T"><span class="identifier">T</span></a></code>
+<p>Run a function, with all contained datastore operations transactional.</p>
+<code><span class="keyword">fun </span><span class="symbol">&lt;</span><span class="identifier">T</span><span class="symbol">&gt;</span> <a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="identifier">transactional</span><span class="symbol">(</span><span class="identifier" id="org.khanacademy.datastore$transactional(org.khanacademy.datastore.Datastore, kotlin.Function1((org.khanacademy.datastore.Datastore, org.khanacademy.datastore.transactional.T)))/block">block</span><span class="symbol">:</span>&nbsp;<a href="-datastore/index.html"><span class="identifier">Datastore</span></a><span class="symbol">.</span><span class="symbol">(</span><span class="symbol">)</span>&nbsp;<span class="symbol">-&gt;</span>&nbsp;<a href="transactional.html#T"><span class="identifier">T</span></a><span class="symbol">)</span><span class="symbol">: </span><a href="transactional.html#T"><span class="identifier">T</span></a></code>
+<p>Run datastore operations in a transaction with default options.</p>
+</td>
 </tr>
 </tbody>
 </table>
