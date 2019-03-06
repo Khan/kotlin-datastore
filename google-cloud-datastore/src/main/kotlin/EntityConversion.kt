@@ -6,6 +6,10 @@ package org.khanacademy.datastore
 import com.google.cloud.Timestamp
 import com.google.cloud.datastore.Blob
 import com.google.cloud.datastore.Entity
+import org.khanacademy.metadata.Key
+import org.khanacademy.metadata.KeyID
+import org.khanacademy.metadata.KeyName
+import org.khanacademy.metadata.KeyPathElement
 import org.khanacademy.metadata.Keyed
 import org.khanacademy.metadata.Meta
 import java.time.Instant
@@ -57,7 +61,7 @@ fun <T : Keyed<T>> Entity.toTypedModel(tRef: KClass<T>): T {
                     ?: throw IllegalStateException(
                         "Expected entity to have a key when getting.")
             } else {
-                getTypedProperty(
+                getTypedProperty<T>(
                     datastoreName(kParameter)
                         ?: throw IllegalArgumentException(
                             "Unable to use nameless parameter $kParameter " +
@@ -120,14 +124,14 @@ internal fun checkNullability(
 /**
  * Get a single property off an entity, converting to the given type.
  */
-internal fun Entity.getTypedProperty(
+internal fun <T : Keyed<T>> Entity.getTypedProperty(
     name: String, type: KType
 ): Any? = checkNullability(
     key?.kind,
     name,
     type,
     if (name in this) {
-        getExistingTypedProperty(name, type)
+        getExistingTypedProperty<T>(name, type)
     } else {
         null
     }
@@ -144,6 +148,34 @@ internal fun convertTimestamp(timestamp: Timestamp): LocalDateTime =
         Instant.ofEpochSecond(timestamp.seconds, timestamp.nanos.toLong()),
         ZoneId.of("UTC")
     )
+
+/**
+ * Convert a datastore key to a Key wrapper.
+ *
+ * TODO(sammy): although less than ideal, reflection here makes it so that we
+ * can have the actual type of the model to which the key corresponds at
+ * runtime.
+ */
+internal fun convertKeyUntyped(datastoreKey: DatastoreKey): Key<*>? {
+    val parent = datastoreKey.parent?.let { parentDatastoreKey ->
+        val parentKey = convertKeyUntyped(parentDatastoreKey)
+            ?: throw IllegalArgumentException(
+                "Unable to convert parent key $parentDatastoreKey")
+        parentKey.parentPath + KeyPathElement(parentKey.kind,
+                parentKey.idOrName)
+    } ?: listOf()
+
+    // TODO(sammy): use asserted primary constructor instead of !!
+    return Key::class.primaryConstructor!!.call(
+        datastoreKey.kind,
+        if (datastoreKey.hasId()) {
+            KeyID(datastoreKey.id)
+        } else {
+            KeyName(datastoreKey.name)
+        },
+        parent
+    )
+}
 
 // Precalculated types for doing conversions from Google datastore entities.
 // (These allow us to avoid reconstructing the type objects for every
@@ -182,7 +214,7 @@ private val TimestampTypes = listOf(
 /**
  * Get the value of an entity's property, given that we know it's present.
  */
-internal fun Entity.getExistingTypedProperty(
+internal fun <T : Keyed<T>> Entity.getExistingTypedProperty(
     name: String, type: KType
 ): Any? = when (type) {
     in ByteArrayTypes -> getBlob(name)?.toByteArray()
@@ -191,6 +223,8 @@ internal fun Entity.getExistingTypedProperty(
     in LongTypes -> getLong(name)
     in StringTypes -> getString(name)
     in TimestampTypes -> getTimestamp(name)?.let(::convertTimestamp)
+    Key::class.createType(type.arguments),
+    Key::class.createType(type.arguments).withNullability(true) -> getKey(name)?.let { convertKeyUntyped(it) }
     // TODO(colin): nested entities
     // TODO(colin): key properties
     // TODO(colin): location (lat/lng) properties

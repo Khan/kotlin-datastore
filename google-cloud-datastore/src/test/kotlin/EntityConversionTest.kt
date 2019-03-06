@@ -16,6 +16,7 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 
 data class PrimitiveTestModel(
+    val aKey: Key<SecondaryTestModel>?,
     val aString: String?,
     val aLong: Long,
     val aBool: Boolean,
@@ -33,11 +34,18 @@ data class ComputedTestModel(
     val computed2 = aString + "_second"
 }
 
+data class SecondaryTestModel(
+    override val key: Key<SecondaryTestModel>
+) : Keyed<SecondaryTestModel>
+
 class EntityConversionTest : StringSpec({
     "It should correctly convert basic fields" {
         val datastoreKey = DatastoreKey.newBuilder(
             "test-project", "PrimitiveTestModel", "the-first-one").build()
+        val keyProp = DatastoreKey.newBuilder(
+            "test-project", "SecondaryTestModel", "key-prop").build()
         val entity = Entity.newBuilder(datastoreKey)
+            .set("aKey", keyProp)
             .set("aString", "abcd")
             .set("aLong", 4L)
             .set("aBool", true)
@@ -49,6 +57,7 @@ class EntityConversionTest : StringSpec({
         val converted = entity.toTypedModel(PrimitiveTestModel::class)
         converted.key.kind shouldBe "PrimitiveTestModel"
         converted.key.idOrName shouldBe KeyName("the-first-one")
+        converted.aKey shouldBe keyProp.toKey<SecondaryTestModel>()
         converted.aString shouldBe "abcd"
         converted.aLong shouldBe 4L
         converted.aBool shouldBe true
@@ -113,21 +122,27 @@ class EntityConversionTest : StringSpec({
             .set("someBytes", Blob.copyFrom("abcdefg".toByteArray()))
             .build()
         val converted = entity.toTypedModel(PrimitiveTestModel::class)
+        converted.aKey shouldBe null
         converted.aString shouldBe null
+        converted.aTimestamp shouldBe null
     }
 
     "It should use null if the entity has a present nullable property" {
         val datastoreKey = DatastoreKey.newBuilder(
             "test-project", "PrimitiveTestModel", "the-first-one").build()
         val entity = Entity.newBuilder(datastoreKey)
+            .set("aKey", NullValue())
             .set("aString", NullValue())
             .set("aLong", 4L)
             .set("aBool", true)
             .set("aDouble", 2.71828)
             .set("someBytes", Blob.copyFrom("abcdefg".toByteArray()))
+            .set("aTimestamp", NullValue())
             .build()
         val converted = entity.toTypedModel(PrimitiveTestModel::class)
+        converted.aKey shouldBe null
         converted.aString shouldBe null
+        converted.aTimestamp shouldBe null
     }
 
     "It should correctly transfer basic fields to the entity" {
