@@ -149,6 +149,7 @@ class EntityConversionTest : StringSpec({
         val testKey = Key<PrimitiveTestModel>(
             "PrimitiveTestModel", "the-first-one")
         val testModel = PrimitiveTestModel(
+            aKey = null,
             aString = "string_value",
             aLong = 4L,
             aBool = true,
@@ -172,6 +173,7 @@ class EntityConversionTest : StringSpec({
         val testKey = Key<PrimitiveTestModel>(
             "PrimitiveTestModel", "the-first-one")
         val testModel = PrimitiveTestModel(
+            aKey = null,
             aString = null,
             aLong = 4L,
             aBool = true,
