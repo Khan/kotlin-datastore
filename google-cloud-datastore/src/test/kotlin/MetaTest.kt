@@ -1,6 +1,7 @@
 package org.khanacademy.datastore
 
 import com.google.cloud.datastore.Entity
+import com.google.cloud.datastore.StringValue
 import io.kotlintest.shouldBe
 import io.kotlintest.shouldThrow
 import io.kotlintest.specs.StringSpec
@@ -22,6 +23,17 @@ data class ComputedAnnotationTestModel(
     @Meta(name = "computed_property")
     val computedProperty = aString + "_computed"
 }
+
+data class IndexedAnnotationTestModel(
+    @Meta(indexed = true)
+    val anIndexedProperty: String,
+
+    @Meta(indexed = false)
+    val anUnindexedProperty: String,
+
+    val anUnspecifiedPropertyDefaultingFalse: String,
+    override val key: Key<IndexedAnnotationTestModel>
+) : Keyed<IndexedAnnotationTestModel>
 
 class ModelAnnotationTest : StringSpec({
     "When converting from an Entity, it should use the annotated name" {
@@ -70,5 +82,25 @@ class ModelAnnotationTest : StringSpec({
         val entity = model.toDatastoreEntity()
         entity.getString("computed_property") shouldBe "abcd_computed"
         ("computedProperty" in entity) shouldBe false
+    }
+
+    "It should set indexed true/false based on the annotation" {
+        val key = Key<IndexedAnnotationTestModel>(
+            "IndexedAnnotationTestModel", "the-first-one")
+        val model = IndexedAnnotationTestModel(
+            anIndexedProperty = "indexed",
+            anUnindexedProperty = "unindexed",
+            anUnspecifiedPropertyDefaultingFalse = "default",
+            key = key
+        )
+
+        val entity = model.toDatastoreEntity()
+        entity.getValue<StringValue>("anIndexedProperty")
+            .excludeFromIndexes() shouldBe false
+        entity.getValue<StringValue>("anUnindexedProperty")
+            .excludeFromIndexes() shouldBe true
+        entity.getValue<StringValue>(
+            "anUnspecifiedPropertyDefaultingFalse")
+            .excludeFromIndexes() shouldBe true
     }
 })

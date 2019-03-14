@@ -16,5 +16,9 @@ annotation class Meta(
     // The name under which a property will be stored in the datastore.
     // We have to use "" as the default because `null` is not an allowed value
     // for annotations.
-    val name: String = ""
+    val name: String = "",
+    // Whether to index a property in the datastore.
+    // Note that in contrast to the java datastore client library, we do not
+    // index by default.
+    val indexed: Boolean = false
 )

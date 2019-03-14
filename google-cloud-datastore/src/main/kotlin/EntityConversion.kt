@@ -5,7 +5,13 @@ package org.khanacademy.datastore
 
 import com.google.cloud.Timestamp
 import com.google.cloud.datastore.Blob
+import com.google.cloud.datastore.BlobValue
+import com.google.cloud.datastore.BooleanValue
+import com.google.cloud.datastore.DoubleValue
 import com.google.cloud.datastore.Entity
+import com.google.cloud.datastore.LongValue
+import com.google.cloud.datastore.StringValue
+import com.google.cloud.datastore.TimestampValue
 import org.khanacademy.metadata.Key
 import org.khanacademy.metadata.KeyID
 import org.khanacademy.metadata.KeyName
@@ -104,6 +110,12 @@ internal fun metaAnnotationName(element: KAnnotatedElement): String? {
         null
     }
 }
+
+/**
+ * Read the indexing out of a @Meta annotation, if present.
+ */
+internal fun metaAnnotationIndexed(element: KAnnotatedElement): Boolean? =
+    element.findAnnotation<Meta>()?.indexed
 
 /**
  * Throw an error with detailed information if a property is unexpectedly null.
@@ -276,28 +288,46 @@ internal fun <P> Entity.Builder.setTypedProperty(
             ?: parameter?.let(::datastoreName)
             ?: property.name
 
-    when (propertyValue) {
-        is ByteArray -> set(name, Blob.copyFrom(propertyValue))
-        // Note that while the code looks identical for the primitive types, we
-        // have to duplicate them so that the compiler can choose the correct
-        // overloaded function based on type.
-        is Boolean -> set(name, propertyValue)
-        is Double -> set(name, propertyValue)
-        is Long -> set(name, propertyValue)
-        is String -> set(name, propertyValue)
+    val indexed =
+        metaAnnotationIndexed(property) // Only present on computed properties.
+            ?: parameter?.let(::metaAnnotationIndexed)
+            ?: false
+
+    val value = when (propertyValue) {
+        // Note that we have to duplicate the .setExcludeFromIndexes and .build
+        // calls here because both of those functions are generic and do not
+        // type check on a builder with unknown type parameters.
+        is ByteArray -> BlobValue.newBuilder(Blob.copyFrom(propertyValue))
+            .setExcludeFromIndexes(!indexed)
+            .build()
+        is Boolean -> BooleanValue.newBuilder(propertyValue)
+            .setExcludeFromIndexes(!indexed)
+            .build()
+        is Double -> DoubleValue.newBuilder(propertyValue)
+            .setExcludeFromIndexes(!indexed)
+            .build()
+        is Long -> LongValue.newBuilder(propertyValue)
+            .setExcludeFromIndexes(!indexed)
+            .build()
+        is String -> StringValue.newBuilder(propertyValue)
+            .setExcludeFromIndexes(!indexed)
+            .build()
         is LocalDateTime -> {
             val timestamp = Timestamp.ofTimeSecondsAndNanos(
                 propertyValue.toEpochSecond(ZoneOffset.UTC),
                 propertyValue.nano)
-            set(name, timestamp)
+            TimestampValue.newBuilder(timestamp)
+                .setExcludeFromIndexes(!indexed)
+                .build()
         }
         // TODO(colin): implement other property types (see
         // getExistingTypedProperty for more detail)
         // TODO(colin): we may want this to actually set `null` in the
         // datastore when implementing default values for properties.
-        null -> Unit
+        null -> null
         else ->
             throw IllegalArgumentException(
                 "Unable to store property $name in the datastore")
     }
+    value?.let { set(name, it) }
 }
