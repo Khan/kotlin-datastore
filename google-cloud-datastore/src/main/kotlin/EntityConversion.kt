@@ -10,6 +10,7 @@ import com.google.cloud.datastore.BooleanValue
 import com.google.cloud.datastore.DoubleValue
 import com.google.cloud.datastore.Entity
 import com.google.cloud.datastore.LongValue
+import com.google.cloud.datastore.NullValue
 import com.google.cloud.datastore.StringValue
 import com.google.cloud.datastore.TimestampValue
 import org.khanacademy.metadata.Key
@@ -47,6 +48,12 @@ internal fun <T : Any> assertedPrimaryConstructor(
                 "constructor")
 }
 
+// Sentinel value used to distinguish a null value in the datastore from a
+// value not present in the datastore at all.
+// We need to distinguish this so that we can use default values only if
+// something has not been set in the datastore.
+val PROPERTY_NOT_PRESENT = object {}
+
 /**
  * Convert a Google cloud datastore entity to one of our model classes.
  *
@@ -76,7 +83,8 @@ fun <T : Keyed<T>> Entity.toTypedModel(tRef: KClass<T>): T {
                     kParameter.type
                 )
             }
-        }.toMap()
+        }.filter { (_, value) -> value !== PROPERTY_NOT_PRESENT }
+        .toMap()
     return constructor.callBy(parameters)
 }
 
@@ -145,7 +153,7 @@ internal fun <T : Keyed<T>> Entity.getTypedProperty(
     if (name in this) {
         getExistingTypedProperty<T>(name, type)
     } else {
-        null
+        PROPERTY_NOT_PRESENT
     }
 )
 
@@ -322,9 +330,9 @@ internal fun <P> Entity.Builder.setTypedProperty(
         }
         // TODO(colin): implement other property types (see
         // getExistingTypedProperty for more detail)
-        // TODO(colin): we may want this to actually set `null` in the
-        // datastore when implementing default values for properties.
-        null -> null
+        null -> NullValue.newBuilder()
+            .setExcludeFromIndexes(!indexed)
+            .build()
         else ->
             throw IllegalArgumentException(
                 "Unable to store property $name in the datastore")

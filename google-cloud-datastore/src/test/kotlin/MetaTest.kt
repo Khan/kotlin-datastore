@@ -53,7 +53,7 @@ class ModelAnnotationTest : StringSpec({
             .set("aString", "abcd")
             .build()
 
-        shouldThrow<NullPointerException> {
+        shouldThrow<IllegalArgumentException> {
             entity.toTypedModel(AnnotationTestModel::class)
         }
     }

@@ -38,6 +38,12 @@ data class SecondaryTestModel(
     override val key: Key<SecondaryTestModel>
 ) : Keyed<SecondaryTestModel>
 
+data class DefaultValueModel(
+    val aStringWithDefault: String = "default_value",
+    val aStringWithNullDefault: String? = null,
+    override val key: Key<DefaultValueModel>
+) : Keyed<DefaultValueModel>
+
 class EntityConversionTest : StringSpec({
     "It should correctly convert basic fields" {
         val datastoreKey = DatastoreKey.newBuilder(
@@ -107,12 +113,12 @@ class EntityConversionTest : StringSpec({
             .set("aBool", true)
             .set("aDouble", 2.71828)
             .build()
-        shouldThrow<NullPointerException> {
+        shouldThrow<IllegalArgumentException> {
             entity.toTypedModel(PrimitiveTestModel::class)
         }
     }
 
-    "It should use null if the entity has a missing nullable property" {
+    "It should throw if the entity has a missing nullable property" {
         val datastoreKey = DatastoreKey.newBuilder(
             "test-project", "PrimitiveTestModel", "the-first-one").build()
         val entity = Entity.newBuilder(datastoreKey)
@@ -121,10 +127,9 @@ class EntityConversionTest : StringSpec({
             .set("aDouble", 2.71828)
             .set("someBytes", Blob.copyFrom("abcdefg".toByteArray()))
             .build()
-        val converted = entity.toTypedModel(PrimitiveTestModel::class)
-        converted.aKey shouldBe null
-        converted.aString shouldBe null
-        converted.aTimestamp shouldBe null
+        shouldThrow<IllegalArgumentException> {
+            entity.toTypedModel(PrimitiveTestModel::class)
+        }
     }
 
     "It should use null if the entity has a present nullable property" {
@@ -169,7 +174,7 @@ class EntityConversionTest : StringSpec({
         entity.key.name shouldBe "the-first-one"
     }
 
-    "It will skip null when transferring to the entity" {
+    "It will explicitly set null when transferring to the entity" {
         val testKey = Key<PrimitiveTestModel>(
             "PrimitiveTestModel", "the-first-one")
         val testModel = PrimitiveTestModel(
@@ -183,7 +188,8 @@ class EntityConversionTest : StringSpec({
             key = testKey)
 
         val entity = testModel.toDatastoreEntity()
-        ("aString" in entity) shouldBe false
+        ("aString" in entity) shouldBe true
+        entity.getString("aString") shouldBe null
     }
 
     "It will transfer computed properties to the entity" {
@@ -197,5 +203,23 @@ class EntityConversionTest : StringSpec({
         val entity = testModel.toDatastoreEntity()
         entity.getString("computed1") shouldBe "a_string_value_first"
         entity.getString("computed2") shouldBe "a_string_value_second"
+    }
+
+    "It will use the default value if a property is missing in the datastore" {
+        val testKey = Key<DefaultValueModel>(
+            "DefaultValueModel", "the-first-one")
+        val entity = Entity.newBuilder(testKey.toDatastoreKey())
+            .build()
+        val result = entity.toTypedModel(DefaultValueModel::class)
+        result.aStringWithDefault shouldBe "default_value"
+        result.aStringWithNullDefault shouldBe null
+    }
+
+    "It will set default values in the datastore, not just on the object" {
+        val testKey = Key<DefaultValueModel>(
+            "DefaultValueModel", "the-first-one")
+        val entity = DefaultValueModel(key = testKey).toDatastoreEntity()
+        entity.getString("aStringWithDefault") shouldBe "default_value"
+        entity.getString("aStringWithNullDefault") shouldBe null
     }
 })
