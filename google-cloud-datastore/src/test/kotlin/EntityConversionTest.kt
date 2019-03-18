@@ -153,8 +153,10 @@ class EntityConversionTest : StringSpec({
     "It should correctly transfer basic fields to the entity" {
         val testKey = Key<PrimitiveTestModel>(
             "PrimitiveTestModel", "the-first-one")
+        val keyProp = Key<SecondaryTestModel>(
+            "SecondaryTestModel", "key-prop")
         val testModel = PrimitiveTestModel(
-            aKey = null,
+            aKey = keyProp,
             aString = "string_value",
             aLong = 4L,
             aBool = true,
@@ -172,6 +174,8 @@ class EntityConversionTest : StringSpec({
         entity.getTimestamp("aTimestamp").seconds shouldBe 0
         entity.key.kind shouldBe "PrimitiveTestModel"
         entity.key.name shouldBe "the-first-one"
+        entity.getKey("aKey").kind shouldBe "SecondaryTestModel"
+        entity.getKey("aKey").name shouldBe "key-prop"
     }
 
     "It will explicitly set null when transferring to the entity" {
