@@ -9,6 +9,7 @@ import com.google.cloud.datastore.BlobValue
 import com.google.cloud.datastore.BooleanValue
 import com.google.cloud.datastore.DoubleValue
 import com.google.cloud.datastore.Entity
+import com.google.cloud.datastore.KeyValue
 import com.google.cloud.datastore.LongValue
 import com.google.cloud.datastore.NullValue
 import com.google.cloud.datastore.StringValue
@@ -185,8 +186,7 @@ internal fun convertKeyUntyped(datastoreKey: DatastoreKey): Key<*>? {
                 parentKey.idOrName)
     } ?: listOf()
 
-    // TODO(sammy): use asserted primary constructor instead of !!
-    return Key::class.primaryConstructor!!.call(
+    return assertedPrimaryConstructor(Key::class).call(
         datastoreKey.kind,
         if (datastoreKey.hasId()) {
             KeyID(datastoreKey.id)
@@ -246,7 +246,6 @@ internal fun <T : Keyed<T>> Entity.getExistingTypedProperty(
     Key::class.createType(type.arguments),
     Key::class.createType(type.arguments).withNullability(true) -> getKey(name)?.let { convertKeyUntyped(it) }
     // TODO(colin): nested entities
-    // TODO(colin): key properties
     // TODO(colin): location (lat/lng) properties
     // TODO(colin): repeated properties
     // TODO(colin): JSON properties
@@ -328,6 +327,9 @@ internal fun <P> Entity.Builder.setTypedProperty(
                 .setExcludeFromIndexes(!indexed)
                 .build()
         }
+        is Key<*> -> KeyValue.newBuilder(propertyValue.toDatastoreKey())
+            .setExcludeFromIndexes(!indexed)
+            .build()
         // TODO(colin): implement other property types (see
         // getExistingTypedProperty for more detail)
         null -> NullValue.newBuilder()
