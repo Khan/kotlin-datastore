@@ -4,6 +4,8 @@ import com.google.cloud.Timestamp
 import com.google.cloud.datastore.Blob
 import com.google.cloud.datastore.Entity
 import com.google.cloud.datastore.NullValue
+import com.google.cloud.datastore.StringValue
+import com.google.cloud.datastore.Value
 import io.kotlintest.shouldBe
 import io.kotlintest.shouldThrow
 import io.kotlintest.specs.StringSpec
@@ -43,6 +45,13 @@ data class DefaultValueModel(
     val aStringWithNullDefault: String? = null,
     override val key: Key<DefaultValueModel>
 ) : Keyed<DefaultValueModel>
+
+data class RepeatedValueModel(
+    val aRepeatedValue: List<String>,
+    val aRepeatedNullableValue: List<String?>,
+    val aRepeatedTimestampValue: List<LocalDateTime?>,
+    override val key: Key<RepeatedValueModel>
+) : Keyed<RepeatedValueModel>
 
 class EntityConversionTest : StringSpec({
     "It should correctly convert basic fields" {
@@ -225,5 +234,67 @@ class EntityConversionTest : StringSpec({
         val entity = DefaultValueModel(key = testKey).toDatastoreEntity()
         entity.getString("aStringWithDefault") shouldBe "default_value"
         entity.getString("aStringWithNullDefault") shouldBe null
+    }
+
+    "It converts basic repeated values correctly" {
+        val testKey = Key<RepeatedValueModel>(
+            "RepeatedValueModel", "the-first-one")
+        val instance = RepeatedValueModel(
+            key = testKey,
+            aRepeatedValue = listOf("a", "b", "c"),
+            aRepeatedNullableValue = listOf(),
+            aRepeatedTimestampValue = listOf()
+        )
+
+        val entity = instance.toDatastoreEntity()
+
+        entity.getList<StringValue>("aRepeatedValue").map { it.get() } shouldBe
+            listOf("a", "b", "c")
+
+        val restored = entity.toTypedModel(RepeatedValueModel::class)
+        restored.aRepeatedValue shouldBe listOf("a", "b", "c")
+        restored.aRepeatedNullableValue shouldBe listOf()
+    }
+
+    "It allows null items for repeated nullable values" {
+        val testKey = Key<RepeatedValueModel>(
+            "RepeatedValueModel", "the-first-one")
+        val instance = RepeatedValueModel(
+            key = testKey,
+            aRepeatedValue = listOf(),
+            aRepeatedNullableValue = listOf("a", null, "c"),
+            aRepeatedTimestampValue = listOf()
+        )
+        val entity = instance.toDatastoreEntity()
+
+        entity.getList<Value<*>>("aRepeatedNullableValue")
+            .map { it.get() } shouldBe listOf("a", null, "c")
+
+        val restored = entity.toTypedModel(RepeatedValueModel::class)
+        restored.aRepeatedValue shouldBe listOf()
+        restored.aRepeatedNullableValue shouldBe listOf("a", null, "c")
+    }
+
+    "It converts complex (timestamp) repeated values correctly" {
+        val epochSeconds = 1004L
+        val localDateTime = LocalDateTime.ofEpochSecond(
+            epochSeconds, 0, ZoneOffset.UTC)
+        val timestamp = Timestamp.ofTimeSecondsAndNanos(epochSeconds, 0)
+
+        val testKey = Key<RepeatedValueModel>(
+            "RepeatedValueModel", "the-first-one")
+        val instance = RepeatedValueModel(
+            key = testKey,
+            aRepeatedValue = listOf(),
+            aRepeatedNullableValue = listOf(),
+            aRepeatedTimestampValue = listOf(localDateTime)
+        )
+        val entity = instance.toDatastoreEntity()
+
+        entity.getList<Value<*>>("aRepeatedTimestampValue")
+            .map { it.get() } shouldBe listOf(timestamp)
+
+        val restored = entity.toTypedModel(RepeatedValueModel::class)
+        restored.aRepeatedTimestampValue shouldBe listOf(localDateTime)
     }
 })

@@ -10,10 +10,12 @@ import com.google.cloud.datastore.BooleanValue
 import com.google.cloud.datastore.DoubleValue
 import com.google.cloud.datastore.Entity
 import com.google.cloud.datastore.KeyValue
+import com.google.cloud.datastore.ListValue
 import com.google.cloud.datastore.LongValue
 import com.google.cloud.datastore.NullValue
 import com.google.cloud.datastore.StringValue
 import com.google.cloud.datastore.TimestampValue
+import com.google.cloud.datastore.Value
 import org.khanacademy.metadata.Key
 import org.khanacademy.metadata.KeyID
 import org.khanacademy.metadata.KeyName
@@ -197,6 +199,30 @@ internal fun convertKeyUntyped(datastoreKey: DatastoreKey): Key<*>? {
     )
 }
 
+/**
+ * Convert a value from the type the datastore client uses to our version.
+ */
+internal fun fromDatastoreType(datastoreValue: Any?): Any? =
+    when (datastoreValue) {
+        is Blob -> datastoreValue.toByteArray()
+        is Timestamp -> convertTimestamp(datastoreValue)
+        is com.google.cloud.datastore.Key -> convertKeyUntyped(datastoreValue)
+        else -> datastoreValue
+    }
+
+/**
+ * Convert a value from our type to the one the datastore client uses.
+ */
+internal fun toDatastoreType(kotlinValue: Any?): Any? =
+    when (kotlinValue) {
+        is ByteArray -> Blob.copyFrom(kotlinValue)
+        is LocalDateTime -> Timestamp.ofTimeSecondsAndNanos(
+            kotlinValue.toEpochSecond(ZoneOffset.UTC),
+            kotlinValue.nano)
+        is Key<*> -> kotlinValue.toDatastoreKey()
+        else -> kotlinValue
+    }
+
 // Precalculated types for doing conversions from Google datastore entities.
 // (These allow us to avoid reconstructing the type objects for every
 // property.)
@@ -236,15 +262,22 @@ private val TimestampTypes = listOf(
  */
 internal fun <T : Keyed<T>> Entity.getExistingTypedProperty(
     name: String, type: KType
-): Any? = when (type) {
-    in ByteArrayTypes -> getBlob(name)?.toByteArray()
+): Any? = fromDatastoreType(when (type) {
+    in ByteArrayTypes -> getBlob(name)
     in BooleanTypes -> getBoolean(name)
     in DoubleTypes -> getDouble(name)
     in LongTypes -> getLong(name)
     in StringTypes -> getString(name)
-    in TimestampTypes -> getTimestamp(name)?.let(::convertTimestamp)
+    in TimestampTypes -> getTimestamp(name)
+    // The datastore does not distinguish `null` from the empty list, instead
+    // treating them both as the empty list.
+    // Therefore we don't allow nullable repeated values; use the empty list
+    // instead. Note that it's still ok for the type of the list elements to be
+    // nullable.
+    List::class.createType(type.arguments) ->
+        getList<Value<*>>(name).map { fromDatastoreType(it.get()) }
     Key::class.createType(type.arguments),
-    Key::class.createType(type.arguments).withNullability(true) -> getKey(name)?.let { convertKeyUntyped(it) }
+    Key::class.createType(type.arguments).withNullability(true) -> getKey(name)
     // TODO(colin): nested entities
     // TODO(colin): location (lat/lng) properties
     // TODO(colin): repeated properties
@@ -256,6 +289,61 @@ internal fun <T : Keyed<T>> Entity.getExistingTypedProperty(
         throw IllegalArgumentException(
             "Unable to use property $name of type $type as a datastore " +
                 "property")
+})
+
+/**
+ * Convert a kotlin-typed value to a datastore Value<V> type.
+ *
+ * This is distinct from `toDatastoreType`, in that this function adds an
+ * additional layer of wrapping in a Value<V>, which allows us to set the
+ * indexing options. `toDatastoreType` is concerned solely with converting
+ * between the types this library uses as part of its API for defining
+ * datastore model properties, and the types the Google datastore client uses
+ * for these properties.
+ */
+internal fun propertyValueToDatastoreValue(
+    name: String,
+    propertyValue: Any?,
+    indexed: Boolean
+): Value<*> = when (val datastoreValue = toDatastoreType(propertyValue)) {
+    // Note that we have to duplicate the .newBuilder, .setExcludeFromIndexes
+    // and .build calls here because both of those functions are generic and do
+    // not type check on a builder with unknown type parameters.
+    is Blob -> BlobValue.newBuilder(datastoreValue)
+        .setExcludeFromIndexes(!indexed)
+        .build()
+    is Boolean -> BooleanValue.newBuilder(datastoreValue)
+        .setExcludeFromIndexes(!indexed)
+        .build()
+    is Double -> DoubleValue.newBuilder(datastoreValue)
+        .setExcludeFromIndexes(!indexed)
+        .build()
+    is Long -> LongValue.newBuilder(datastoreValue)
+        .setExcludeFromIndexes(!indexed)
+        .build()
+    is String -> StringValue.newBuilder(datastoreValue)
+        .setExcludeFromIndexes(!indexed)
+        .build()
+    is Timestamp -> TimestampValue.newBuilder(datastoreValue)
+        .setExcludeFromIndexes(!indexed)
+        .build()
+    is List<*> -> ListValue.newBuilder()
+        .setExcludeFromIndexes(!indexed)
+        .set(datastoreValue.map {
+            propertyValueToDatastoreValue(name, it, indexed)
+        })
+        .build()
+    is DatastoreKey -> KeyValue.newBuilder(datastoreValue)
+        .setExcludeFromIndexes(!indexed)
+        .build()
+    // TODO(colin): implement other property types (see
+    // getExistingTypedProperty for more detail)
+    null -> NullValue.newBuilder()
+        .setExcludeFromIndexes(!indexed)
+        .build()
+    else ->
+        throw IllegalArgumentException(
+            "Unable to store property $name in the datastore")
 }
 
 /**
@@ -300,44 +388,5 @@ internal fun <P> Entity.Builder.setTypedProperty(
             ?: parameter?.let(::metaAnnotationIndexed)
             ?: false
 
-    val value = when (propertyValue) {
-        // Note that we have to duplicate the .setExcludeFromIndexes and .build
-        // calls here because both of those functions are generic and do not
-        // type check on a builder with unknown type parameters.
-        is ByteArray -> BlobValue.newBuilder(Blob.copyFrom(propertyValue))
-            .setExcludeFromIndexes(!indexed)
-            .build()
-        is Boolean -> BooleanValue.newBuilder(propertyValue)
-            .setExcludeFromIndexes(!indexed)
-            .build()
-        is Double -> DoubleValue.newBuilder(propertyValue)
-            .setExcludeFromIndexes(!indexed)
-            .build()
-        is Long -> LongValue.newBuilder(propertyValue)
-            .setExcludeFromIndexes(!indexed)
-            .build()
-        is String -> StringValue.newBuilder(propertyValue)
-            .setExcludeFromIndexes(!indexed)
-            .build()
-        is LocalDateTime -> {
-            val timestamp = Timestamp.ofTimeSecondsAndNanos(
-                propertyValue.toEpochSecond(ZoneOffset.UTC),
-                propertyValue.nano)
-            TimestampValue.newBuilder(timestamp)
-                .setExcludeFromIndexes(!indexed)
-                .build()
-        }
-        is Key<*> -> KeyValue.newBuilder(propertyValue.toDatastoreKey())
-            .setExcludeFromIndexes(!indexed)
-            .build()
-        // TODO(colin): implement other property types (see
-        // getExistingTypedProperty for more detail)
-        null -> NullValue.newBuilder()
-            .setExcludeFromIndexes(!indexed)
-            .build()
-        else ->
-            throw IllegalArgumentException(
-                "Unable to store property $name in the datastore")
-    }
-    value?.let { set(name, it) }
+    set(name, propertyValueToDatastoreValue(name, propertyValue, indexed))
 }
