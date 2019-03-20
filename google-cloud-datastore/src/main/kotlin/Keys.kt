@@ -11,37 +11,43 @@ import org.khanacademy.metadata.Keyed
 
 typealias DatastoreKey = com.google.cloud.datastore.Key
 
-internal fun rootKeyPathToDatastoreKey(path: KeyPathElement): DatastoreKey {
-    val (kind, idOrName) = path
-    // Unfortunately this switching on type is required to distinguish between
-    // overloaded java methods, even though the code is the same here for
-    // either ID or name.
-    return when (idOrName) {
-        // TODO(colin): this implies that this library can only access the
-        // datastore from one project per executable. Maybe relax this
-        // constraint?
-        is KeyID -> DatastoreKey.newBuilder(
-            DBEnvAndProject.getEnvAndProject().project, kind, idOrName.value)
-                .build()
-        is KeyName -> DatastoreKey.newBuilder(
-            DBEnvAndProject.getEnvAndProject().project, kind, idOrName.value)
-                .build()
-    }
-}
-
-internal fun keyPathElementToDatastoreKey(
-    parent: DatastoreKey, path: KeyPathElement
+internal fun rootKeyPathToDatastoreKey(
+    path: KeyPathElement,
+    namespace: String? = null
 ): DatastoreKey {
     val (kind, idOrName) = path
     // Unfortunately this switching on type is required to distinguish between
     // overloaded java methods, even though the code is the same here for
     // either ID or name.
-    return when (idOrName) {
-        is KeyID ->
-            DatastoreKey.newBuilder(parent, kind, idOrName.value).build()
-        is KeyName ->
-            DatastoreKey.newBuilder(parent, kind, idOrName.value).build()
+    val builder = when (idOrName) {
+        // TODO(colin): this implies that this library can only access the
+        // datastore from one project per executable. Maybe relax this
+        // constraint?
+        is KeyID -> DatastoreKey.newBuilder(
+            DBEnvAndProject.getEnvAndProject().project, kind, idOrName.value)
+        is KeyName -> DatastoreKey.newBuilder(
+            DBEnvAndProject.getEnvAndProject().project, kind, idOrName.value)
     }
+    namespace?.let { builder.setNamespace(namespace) }
+    return builder.build()
+}
+
+internal fun keyPathElementToDatastoreKey(
+    parent: DatastoreKey, path: KeyPathElement,
+    namespace: String? = null
+): DatastoreKey {
+    val (kind, idOrName) = path
+    // Unfortunately this switching on type is required to distinguish between
+    // overloaded java methods, even though the code is the same here for
+    // either ID or name.
+    val builder = when (idOrName) {
+        is KeyID ->
+            DatastoreKey.newBuilder(parent, kind, idOrName.value)
+        is KeyName ->
+            DatastoreKey.newBuilder(parent, kind, idOrName.value)
+    }
+    namespace?.let { builder.setNamespace(it) }
+    return builder.build()
 }
 
 /**
@@ -51,8 +57,10 @@ fun Key<*>.toDatastoreKey(): DatastoreKey {
     val rootPath = path().first()
     val remainingPath = path().drop(1)
     return remainingPath.fold(
-        rootKeyPathToDatastoreKey(rootPath),
-        ::keyPathElementToDatastoreKey)
+        rootKeyPathToDatastoreKey(rootPath, namespace)
+    ) { parent, path ->
+        keyPathElementToDatastoreKey(parent, path, namespace)
+    }
 }
 
 /**
@@ -67,5 +75,6 @@ fun <T : Keyed<T>> DatastoreKey.toKey(): Key<T> = Key(
         }
     },
     kind = kind,
-    idOrName = if (hasId()) { KeyID(id) } else { KeyName(name) }
+    idOrName = if (hasId()) { KeyID(id) } else { KeyName(name) },
+    namespace = if (namespace == "") { null } else { namespace }
 )

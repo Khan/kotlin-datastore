@@ -12,7 +12,8 @@ data class KeyPathElement(val kind: String, val idOrName: KeyIDOrName)
 data class Key<T : Keyed<T>>(
     val kind: String,
     val idOrName: KeyIDOrName,
-    val parentPath: List<KeyPathElement> = listOf()
+    val parentPath: List<KeyPathElement> = listOf(),
+    val namespace: String? = null
 ) {
     fun path(): List<KeyPathElement> = parentPath +
         KeyPathElement(kind, idOrName)
@@ -20,14 +21,16 @@ data class Key<T : Keyed<T>>(
     constructor(
         kind: String,
         name: String,
-        parentPath: List<KeyPathElement> = listOf()
-    ) : this(kind, KeyName(name), parentPath)
+        parentPath: List<KeyPathElement> = listOf(),
+        namespace: String? = null
+    ) : this(kind, KeyName(name), parentPath, namespace)
 
     constructor(
         kind: String,
         id: Long,
-        parentPath: List<KeyPathElement> = listOf()
-    ) : this(kind, KeyID(id), parentPath)
+        parentPath: List<KeyPathElement> = listOf(),
+        namespace: String? = null
+    ) : this(kind, KeyID(id), parentPath, namespace)
 }
 
 interface Keyed<T : Keyed<T>> {

@@ -13,8 +13,6 @@ package org.khanacademy.datastore
 import com.google.cloud.Timestamp
 import com.google.cloud.datastore.Blob
 import com.google.cloud.datastore.StructuredQuery.PropertyFilter
-import java.time.LocalDateTime
-import java.time.ZoneOffset
 
 enum class QueryFilterCondition {
     EQUAL,
@@ -38,86 +36,90 @@ data class QueryFilter(
         // We therefore have to list out all the options manually in order to
         // be able to call the correct overload of the function. There are a
         // lot of them.
-        when (value) {
-            is ByteArray -> {
-                val converted = Blob.copyFrom(value)
-                when (condition) {
-                    QueryFilterCondition.EQUAL ->
-                        PropertyFilter.eq(fieldName, converted)
-                    QueryFilterCondition.LESS_THAN ->
-                        PropertyFilter.lt(fieldName, converted)
-                    QueryFilterCondition.LESS_THAN_OR_EQUAL ->
-                        PropertyFilter.le(fieldName, converted)
-                    QueryFilterCondition.GREATER_THAN ->
-                        PropertyFilter.gt(fieldName, converted)
-                    QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
-                        PropertyFilter.ge(fieldName, converted)
-                }
+        when (val datastoreValue = toDatastoreType(value)) {
+            is Blob -> when (condition) {
+                QueryFilterCondition.EQUAL ->
+                    PropertyFilter.eq(fieldName, datastoreValue)
+                QueryFilterCondition.LESS_THAN ->
+                    PropertyFilter.lt(fieldName, datastoreValue)
+                QueryFilterCondition.LESS_THAN_OR_EQUAL ->
+                    PropertyFilter.le(fieldName, datastoreValue)
+                QueryFilterCondition.GREATER_THAN ->
+                    PropertyFilter.gt(fieldName, datastoreValue)
+                QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
+                    PropertyFilter.ge(fieldName, datastoreValue)
             }
             is Boolean -> when (condition) {
                 QueryFilterCondition.EQUAL ->
-                    PropertyFilter.eq(fieldName, value)
+                    PropertyFilter.eq(fieldName, datastoreValue)
                 QueryFilterCondition.LESS_THAN ->
-                    PropertyFilter.lt(fieldName, value)
+                    PropertyFilter.lt(fieldName, datastoreValue)
                 QueryFilterCondition.LESS_THAN_OR_EQUAL ->
-                    PropertyFilter.le(fieldName, value)
+                    PropertyFilter.le(fieldName, datastoreValue)
                 QueryFilterCondition.GREATER_THAN ->
-                    PropertyFilter.gt(fieldName, value)
+                    PropertyFilter.gt(fieldName, datastoreValue)
                 QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
-                    PropertyFilter.ge(fieldName, value)
+                    PropertyFilter.ge(fieldName, datastoreValue)
             }
             is Double -> when (condition) {
                 QueryFilterCondition.EQUAL ->
-                    PropertyFilter.eq(fieldName, value)
+                    PropertyFilter.eq(fieldName, datastoreValue)
                 QueryFilterCondition.LESS_THAN ->
-                    PropertyFilter.lt(fieldName, value)
+                    PropertyFilter.lt(fieldName, datastoreValue)
                 QueryFilterCondition.LESS_THAN_OR_EQUAL ->
-                    PropertyFilter.le(fieldName, value)
+                    PropertyFilter.le(fieldName, datastoreValue)
                 QueryFilterCondition.GREATER_THAN ->
-                    PropertyFilter.gt(fieldName, value)
+                    PropertyFilter.gt(fieldName, datastoreValue)
                 QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
-                    PropertyFilter.ge(fieldName, value)
+                    PropertyFilter.ge(fieldName, datastoreValue)
             }
             is Long -> when (condition) {
                 QueryFilterCondition.EQUAL ->
-                    PropertyFilter.eq(fieldName, value)
+                    PropertyFilter.eq(fieldName, datastoreValue)
                 QueryFilterCondition.LESS_THAN ->
-                    PropertyFilter.lt(fieldName, value)
+                    PropertyFilter.lt(fieldName, datastoreValue)
                 QueryFilterCondition.LESS_THAN_OR_EQUAL ->
-                    PropertyFilter.le(fieldName, value)
+                    PropertyFilter.le(fieldName, datastoreValue)
                 QueryFilterCondition.GREATER_THAN ->
-                    PropertyFilter.gt(fieldName, value)
+                    PropertyFilter.gt(fieldName, datastoreValue)
                 QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
-                    PropertyFilter.ge(fieldName, value)
+                    PropertyFilter.ge(fieldName, datastoreValue)
             }
             is String -> when (condition) {
                 QueryFilterCondition.EQUAL ->
-                    PropertyFilter.eq(fieldName, value)
+                    PropertyFilter.eq(fieldName, datastoreValue)
                 QueryFilterCondition.LESS_THAN ->
-                    PropertyFilter.lt(fieldName, value)
+                    PropertyFilter.lt(fieldName, datastoreValue)
                 QueryFilterCondition.LESS_THAN_OR_EQUAL ->
-                    PropertyFilter.le(fieldName, value)
+                    PropertyFilter.le(fieldName, datastoreValue)
                 QueryFilterCondition.GREATER_THAN ->
-                    PropertyFilter.gt(fieldName, value)
+                    PropertyFilter.gt(fieldName, datastoreValue)
                 QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
-                    PropertyFilter.ge(fieldName, value)
+                    PropertyFilter.ge(fieldName, datastoreValue)
             }
-            is LocalDateTime -> {
-                val converted = Timestamp.ofTimeSecondsAndNanos(
-                    value.toEpochSecond(ZoneOffset.UTC),
-                    value.nano)
-                when (condition) {
-                    QueryFilterCondition.EQUAL ->
-                        PropertyFilter.eq(fieldName, converted)
-                    QueryFilterCondition.LESS_THAN ->
-                        PropertyFilter.lt(fieldName, converted)
-                    QueryFilterCondition.LESS_THAN_OR_EQUAL ->
-                        PropertyFilter.le(fieldName, converted)
-                    QueryFilterCondition.GREATER_THAN ->
-                        PropertyFilter.gt(fieldName, converted)
-                    QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
-                        PropertyFilter.ge(fieldName, converted)
-                }
+            is Timestamp -> when (condition) {
+                QueryFilterCondition.EQUAL ->
+                    PropertyFilter.eq(fieldName, datastoreValue)
+                QueryFilterCondition.LESS_THAN ->
+                    PropertyFilter.lt(fieldName, datastoreValue)
+                QueryFilterCondition.LESS_THAN_OR_EQUAL ->
+                    PropertyFilter.le(fieldName, datastoreValue)
+                QueryFilterCondition.GREATER_THAN ->
+                    PropertyFilter.gt(fieldName, datastoreValue)
+                QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
+                    PropertyFilter.ge(fieldName, datastoreValue)
+            }
+            is DatastoreKey -> when (condition) {
+                QueryFilterCondition.EQUAL ->
+                    PropertyFilter.eq(fieldName, datastoreValue)
+                QueryFilterCondition.LESS_THAN ->
+                    PropertyFilter.lt(fieldName, datastoreValue)
+                QueryFilterCondition.LESS_THAN_OR_EQUAL ->
+                    PropertyFilter.le(fieldName, datastoreValue)
+                QueryFilterCondition.GREATER_THAN ->
+                    PropertyFilter.gt(fieldName, datastoreValue)
+                QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
+                    PropertyFilter.ge(fieldName, datastoreValue)
             }
             // TODO(colin): implement querying on other supported property
             // types. See EntityConversion.kt for a more comprehensive list.

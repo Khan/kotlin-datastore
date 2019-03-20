@@ -178,6 +178,9 @@ internal fun convertTimestamp(timestamp: Timestamp): LocalDateTime =
  * TODO(sammy): although less than ideal, reflection here makes it so that we
  * can have the actual type of the model to which the key corresponds at
  * runtime.
+ *
+ * TODO(colin): combine this with DatastoreKey.toKey() (they behave differently
+ * with respect to type inference currently).
  */
 internal fun convertKeyUntyped(datastoreKey: DatastoreKey): Key<*>? {
     val parent = datastoreKey.parent?.let { parentDatastoreKey ->
@@ -188,6 +191,12 @@ internal fun convertKeyUntyped(datastoreKey: DatastoreKey): Key<*>? {
                 parentKey.idOrName)
     } ?: listOf()
 
+    val namespace = if (datastoreKey.namespace == "") {
+        null
+    } else {
+        datastoreKey.namespace
+    }
+
     return assertedPrimaryConstructor(Key::class).call(
         datastoreKey.kind,
         if (datastoreKey.hasId()) {
@@ -195,7 +204,8 @@ internal fun convertKeyUntyped(datastoreKey: DatastoreKey): Key<*>? {
         } else {
             KeyName(datastoreKey.name)
         },
-        parent
+        parent,
+        namespace
     )
 }
 

@@ -2,6 +2,7 @@ package com.google.cloud.datastore;
 
 import com.google.datastore.v1.Entity;
 import com.google.datastore.v1.Filter;
+import com.google.datastore.v1.Key;
 
 /**
  * Java shim to allow us to look at the contents of queries and entities.
@@ -23,6 +24,14 @@ import com.google.datastore.v1.Filter;
 public class DatastoreTypeConverter {
     public static Filter filterToPb(StructuredQuery.Filter filter) {
         return filter.toPb();
+    }
+
+    public static Key keyToPb(com.google.cloud.datastore.Key key) {
+        return key.toPb();
+    }
+
+    public static com.google.cloud.datastore.Key keyFromPb(Key key) {
+        return com.google.cloud.datastore.Key.fromPb(key);
     }
 
     public static Entity entityToPb(com.google.cloud.datastore.Entity entity) {
