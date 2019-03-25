@@ -48,6 +48,7 @@ import com.google.cloud.datastore.QueryResults
 import com.google.cloud.datastore.ReadOption
 import com.google.cloud.datastore.StructuredQuery
 import com.google.cloud.datastore.Transaction
+import com.google.datastore.v1.Key.PathElement.IdTypeCase
 import com.google.datastore.v1.PropertyFilter
 import com.google.datastore.v1.TransactionOptions
 import com.google.datastore.v1.Value
@@ -60,6 +61,8 @@ import org.khanacademy.datastore.DatastoreKey
 import org.khanacademy.datastore.restoreLocalDBAfter
 import org.khanacademy.datastore.toDatastoreEntity
 import org.khanacademy.metadata.Keyed
+
+typealias KeyPb = com.google.datastore.v1.Key
 
 /**
  * An implementation of Google's `Datastore` that throws on all methods.
@@ -197,6 +200,80 @@ internal fun Timestamp.compareTo(other: Timestamp): Int {
 }
 
 /**
+ * If a list is shorter than a specified size, pad it with nulls to that size.
+ */
+internal fun <T> maybeNullPad(list: List<T>, toLength: Int): List<T?> =
+    if (list.size >= toLength) {
+        list
+    } else {
+        list + List(toLength - list.size) { null }
+    }
+
+/**
+ * Implementation of java.lang.Comparable for Key protobufs.
+ *
+ * For keys of the same number of path elements and the same type, this
+ * compares as would (kind, id, kind, id, ...) tuples.
+ *
+ * If we're comparing a key to another key that's longer but shares the same
+ * prefix, the shorter key is ordered first.
+ *
+ * If we're comparing keys of mixed name / id types, an integer ID always
+ * compares lower than a string name.
+ *
+ * These edge-case comparison rules are based on the key comparison code in
+ * the python datastore API:
+ * https://github.com/Khan/frankenserver/blob/master/python/google/appengine/api/datastore_types.py
+ *
+ * TODO(colin): if we relax the single-project constraint, then we should
+ * compare projectId (called app in python) here too.
+ */
+internal fun KeyPb.compareTo(other: KeyPb): Int {
+    if (partitionId.namespaceId != other.partitionId.namespaceId) {
+        return partitionId.namespaceId.compareTo(other.partitionId.namespaceId)
+    }
+
+    val elementPairs = maybeNullPad(pathList, other.pathList.size)
+        .zip(maybeNullPad(other.pathList, pathList.size))
+
+    return elementPairs.fold(0) { result, (left, right) ->
+        when {
+            // If an earlier element compared non-equal, we use that result.
+            result != 0 -> result
+
+            // null compares less than everything
+            left == null && right != null -> -1
+            left != null && right == null -> 1
+            left == null && right == null -> 0
+
+            // Compare kinds first according to normal string rules.
+            // We're using null assertions here because the compiler can't
+            // infer the above three boolean conditions were an exhaustive null
+            // check.
+            left!!.kind != right!!.kind ->
+                left.kind.compareTo(right.kind)
+
+            // IDs always compare less than names.
+            left.idTypeCase == IdTypeCase.ID &&
+                right.idTypeCase == IdTypeCase.NAME -> -1
+            left.idTypeCase == IdTypeCase.NAME &&
+                right.idTypeCase == IdTypeCase.ID -> 1
+
+            // If we have the same ID/name type for both, use normal comparison
+            // rules.
+            left.idTypeCase == IdTypeCase.ID ->
+                left.id.compareTo(right.id)
+            left.idTypeCase == IdTypeCase.NAME ->
+                left.name.compareTo(right.name)
+            else ->
+                throw Exception(
+                    "This should be unreachable code and reflects a bug in " +
+                        "the library. Debug: left = $left, right = $right.")
+        }
+    }
+}
+
+/**
  * Implementation of java.lang.Comparable for Values, used in query conditions.
  *
  * We assume that both values are of the same type.
@@ -213,7 +290,7 @@ internal operator fun Value.compareTo(other: Value): Int {
         Value.ValueTypeCase.TIMESTAMP_VALUE ->
             this.timestampValue.compareTo(other.timestampValue)
         Value.ValueTypeCase.KEY_VALUE ->
-            TODO("Implement querying by keys")
+            this.keyValue.compareTo(other.keyValue)
         Value.ValueTypeCase.STRING_VALUE ->
             this.stringValue.compareTo(other.stringValue)
         Value.ValueTypeCase.BLOB_VALUE ->

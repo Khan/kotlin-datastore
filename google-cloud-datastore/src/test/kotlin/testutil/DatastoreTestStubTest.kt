@@ -1,5 +1,6 @@
 package org.khanacademy.datastore.testutil
 
+import com.google.cloud.datastore.DatastoreTypeConverter
 import io.kotlintest.shouldBe
 import io.kotlintest.shouldNotBe
 import io.kotlintest.shouldThrow
@@ -10,9 +11,12 @@ import org.khanacademy.datastore.get
 import org.khanacademy.datastore.keysOnlyQuery
 import org.khanacademy.datastore.put
 import org.khanacademy.datastore.query
+import org.khanacademy.datastore.toDatastoreKey
+import org.khanacademy.datastore.toKey
 import org.khanacademy.metadata.Key
 import org.khanacademy.metadata.KeyID
 import org.khanacademy.metadata.KeyName
+import org.khanacademy.metadata.KeyPathElement
 import org.khanacademy.metadata.Keyed
 import java.time.LocalDateTime
 import java.time.ZoneOffset
@@ -24,7 +28,8 @@ data class TestKind(
 data class TestQueryKind(
     override val key: Key<TestQueryKind>,
     val aString: String,
-    val aTimestamp: LocalDateTime
+    val aTimestamp: LocalDateTime,
+    val aKey: Key<TestKind>
 ) : Keyed<TestQueryKind>
 
 class DatastoreTestStubTest : StringSpec({
@@ -88,22 +93,29 @@ class DatastoreTestStubTest : StringSpec({
         TestQueryKind(
             key = Key("TestQueryKind", 1),
             aString = "a",
-            aTimestamp = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC)
+            aTimestamp = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC),
+            aKey = Key("TestKind", 1)
         ),
         TestQueryKind(
             key = Key("TestQueryKind", 2),
             aString = "b",
-            aTimestamp = LocalDateTime.ofEpochSecond(1, 0, ZoneOffset.UTC)
+            aTimestamp = LocalDateTime.ofEpochSecond(1, 0, ZoneOffset.UTC),
+            aKey = Key("TestKind", 2)
         ),
         TestQueryKind(
             key = Key("TestQueryKind", 3),
             aString = "c",
-            aTimestamp = LocalDateTime.ofEpochSecond(1, 1, ZoneOffset.UTC)
+            aTimestamp = LocalDateTime.ofEpochSecond(1, 1, ZoneOffset.UTC),
+            aKey = Key(
+                "TestKind", 1,
+                parentPath = listOf(KeyPathElement("AParentKind", KeyID(1))))
+
         ),
         TestQueryKind(
             key = Key("TestQueryKind", 4),
             aString = "d",
-            aTimestamp = LocalDateTime.ofEpochSecond(2, 0, ZoneOffset.UTC)
+            aTimestamp = LocalDateTime.ofEpochSecond(2, 0, ZoneOffset.UTC),
+            aKey = Key("TestKind", "some-string-key")
         ),
         TestKind(
             key = Key("TestKind", 1)
@@ -131,6 +143,16 @@ class DatastoreTestStubTest : StringSpec({
         }
     }
 
+    "It should correctly evaluate key equality queries" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>("TestQueryKind") {
+                "aKey" eq Key<TestKind>("TestKind", 1)
+            }.toList()
+            result.size shouldBe 1
+            result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 1)
+        }
+    }
+
     "It should correctly evaluate simple inequality queries" {
         withMockDatastore(queryFixtures) {
             val result = DB.query<TestQueryKind>("TestQueryKind") {
@@ -152,6 +174,49 @@ class DatastoreTestStubTest : StringSpec({
             result.map { (it.key.idOrName as KeyID).value } shouldBe
                 listOf(3L, 4L)
         }
+    }
+
+    "It should correctly evaluate key inequality queries" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>("TestQueryKind") {
+                "aKey" ge Key<TestKind>("TestKind", 2)
+            }.toList()
+            result.size shouldBe 2
+            result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 2)
+            result[1].key shouldBe Key<TestQueryKind>("TestQueryKind", 4)
+        }
+    }
+
+    "It should correctly evaluate key inequality queries with parents" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>("TestQueryKind") {
+                "aKey" lt Key<TestKind>("TestKind", 1)
+            }.toList()
+            result.size shouldBe 1
+            result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 3)
+        }
+    }
+
+    "It should correctly compare keys with parents and namespaces" {
+        val basicKey = Key<TestKind>("TestKind", 1)
+        val earlyNamespaceKey = Key<TestKind>("TestKind", 1, namespace = "aaa")
+        val lateNamespaceKey = Key<TestKind>("TestKind", 1, namespace = "zzz")
+        val lateNamespaceKeyWithParent = Key<TestKind>(
+            "TestKind", 1, namespace = "zzz", parentPath = listOf(
+                KeyPathElement("AParentKind", KeyID(1))))
+        val sorted =
+            listOf(
+                earlyNamespaceKey, basicKey, lateNamespaceKey,
+                lateNamespaceKeyWithParent
+            )
+                .map { it.toDatastoreKey() }
+                .map(DatastoreTypeConverter::keyToPb)
+                .sortedWith(Comparator<KeyPb> { a, b -> a.compareTo(b) })
+                .map(DatastoreTypeConverter::keyFromPb)
+                .map { it.toKey<TestKind>() }
+        sorted shouldBe listOf(
+            basicKey, earlyNamespaceKey, lateNamespaceKeyWithParent,
+            lateNamespaceKey)
     }
 
     "Keys only queries should also return the same results, just with keys" {

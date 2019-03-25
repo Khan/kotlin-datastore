@@ -4,8 +4,14 @@ import com.google.cloud.datastore.DatastoreTypeConverter
 import com.google.datastore.v1.PropertyFilter
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.StringSpec
+import org.khanacademy.metadata.Key
+import org.khanacademy.metadata.Keyed
 import java.time.LocalDateTime
 import java.time.ZoneOffset
+
+data class KeyTestModel(
+    override val key: Key<KeyTestModel>
+) : Keyed<KeyTestModel>
 
 class QueryTest : StringSpec({
     "It should convert byte array conditions correctly" {
@@ -76,6 +82,22 @@ class QueryTest : StringSpec({
         filter.propertyFilter.op shouldBe
             PropertyFilter.Operator.GREATER_THAN_OR_EQUAL
         filter.propertyFilter.value.timestampValue.seconds shouldBe 10L
+    }
+
+    "It should convert key conditions correctly" {
+        val filter = DatastoreTypeConverter.filterToPb(QueryFilter(
+            "aField",
+            QueryFilterCondition.LESS_THAN,
+            Key<KeyTestModel>("KeyTestModel", "the-first-one")
+        ).toDatastoreFilter())
+        filter.propertyFilter.property.name shouldBe "aField"
+        filter.propertyFilter.op shouldBe
+            PropertyFilter.Operator.LESS_THAN
+        val keyPath = filter.propertyFilter.value.keyValue.pathList
+        keyPath.size shouldBe 1
+        keyPath[0].kind shouldBe "KeyTestModel"
+        keyPath[0].name shouldBe "the-first-one"
+        keyPath[0].id shouldBe 0 // 0 is the protobuf default, not a real ID
     }
 
     "The query DSL should correctly construct filters" {
