@@ -3,6 +3,8 @@ package org.khanacademy.datastore
 import com.google.cloud.Timestamp
 import com.google.cloud.datastore.Blob
 import com.google.cloud.datastore.Entity
+import com.google.cloud.datastore.EntityValue
+import com.google.cloud.datastore.IncompleteKey
 import com.google.cloud.datastore.NullValue
 import com.google.cloud.datastore.StringValue
 import com.google.cloud.datastore.Value
@@ -12,6 +14,7 @@ import io.kotlintest.specs.StringSpec
 import org.khanacademy.metadata.Key
 import org.khanacademy.metadata.KeyName
 import org.khanacademy.metadata.Keyed
+import org.khanacademy.metadata.Property
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -54,6 +57,18 @@ data class RepeatedValueModel(
     val aRepeatedTimestampValue: List<LocalDateTime?>,
     override val key: Key<RepeatedValueModel>
 ) : Keyed<RepeatedValueModel>
+
+data class LocalStructuredProperty(
+    val innerProp1: String,
+    val innerProp2: LocalDateTime
+) : Property
+
+data class EntityPropertyModel(
+    val basic: String,
+    val structured: LocalStructuredProperty,
+    val repeatedStructured: List<LocalStructuredProperty>,
+    override val key: Key<EntityPropertyModel>
+) : Keyed<EntityPropertyModel>
 
 class EntityConversionTest : StringSpec({
     "It should correctly convert basic fields" {
@@ -312,5 +327,42 @@ class EntityConversionTest : StringSpec({
 
         val restored = entity.toTypedModel(RepeatedValueModel::class)
         restored.aRepeatedTimestampValue shouldBe listOf(localDateTime)
+    }
+
+    "It converts structured (entity) properties correctly" {
+        val testKey = Key<EntityPropertyModel>(
+            "EntityPropertyModel", "the-first-one")
+        val innerDateTime = LocalDateTime.ofEpochSecond(
+            1005L, 0, ZoneOffset.UTC)
+        val instance = EntityPropertyModel(
+            basic = "a_string",
+            structured = LocalStructuredProperty(
+                innerProp1 = "inner_string",
+                innerProp2 = innerDateTime
+            ),
+            repeatedStructured = listOf(
+                LocalStructuredProperty("repeat_1", innerDateTime),
+                LocalStructuredProperty("repeat_2", innerDateTime)
+            ),
+            key = testKey
+        )
+        val entity = instance.toDatastoreEntity()
+
+        val inner = entity.getEntity<IncompleteKey>("structured")
+        inner.getString("innerProp1") shouldBe "inner_string"
+        inner.getTimestamp("innerProp2").seconds shouldBe 1005L
+        entity.getString("basic") shouldBe "a_string"
+        val innerRepeated = entity.getList<EntityValue>("repeatedStructured")
+        innerRepeated.size shouldBe 2
+        innerRepeated[0].get().getString("innerProp1") shouldBe "repeat_1"
+        innerRepeated[1].get().getString("innerProp1") shouldBe "repeat_2"
+
+        val restored = entity.toTypedModel(EntityPropertyModel::class)
+        restored.basic shouldBe "a_string"
+        restored.structured.innerProp1 shouldBe "inner_string"
+        restored.structured.innerProp2 shouldBe innerDateTime
+        restored.repeatedStructured.size shouldBe 2
+        restored.repeatedStructured[0].innerProp1 shouldBe "repeat_1"
+        restored.repeatedStructured[1].innerProp1 shouldBe "repeat_2"
     }
 })
