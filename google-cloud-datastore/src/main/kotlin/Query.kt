@@ -14,24 +14,29 @@ import com.google.cloud.Timestamp
 import com.google.cloud.datastore.Blob
 import com.google.cloud.datastore.NullValue
 import com.google.cloud.datastore.StructuredQuery.PropertyFilter
+import org.khanacademy.metadata.Key
 
-enum class QueryFilterCondition {
+sealed class QueryFilter {
+    internal abstract fun toDatastoreFilter(): PropertyFilter
+}
+
+enum class FieldCondition {
     EQUAL,
     LESS_THAN,
     LESS_THAN_OR_EQUAL,
     GREATER_THAN,
-    GREATER_THAN_OR_EQUAL
+    GREATER_THAN_OR_EQUAL,
 }
 
 /**
  * Basic filter on a single property by equality or inequality.
  */
-data class QueryFilter(
+data class FieldQueryFilter(
     val fieldName: String,
-    val condition: QueryFilterCondition,
+    val condition: FieldCondition,
     val value: Any?
-) {
-    internal fun toDatastoreFilter(): PropertyFilter =
+) : QueryFilter() {
+    internal override fun toDatastoreFilter(): PropertyFilter =
         // This function is pretty gross because the datastore client library
         // uses no generics or abstraction around filter types for this at all.
         // We therefore have to list out all the options manually in order to
@@ -39,99 +44,99 @@ data class QueryFilter(
         // lot of them.
         when (val datastoreValue = toDatastoreType(value)) {
             is Blob -> when (condition) {
-                QueryFilterCondition.EQUAL ->
+                FieldCondition.EQUAL ->
                     PropertyFilter.eq(fieldName, datastoreValue)
-                QueryFilterCondition.LESS_THAN ->
+                FieldCondition.LESS_THAN ->
                     PropertyFilter.lt(fieldName, datastoreValue)
-                QueryFilterCondition.LESS_THAN_OR_EQUAL ->
+                FieldCondition.LESS_THAN_OR_EQUAL ->
                     PropertyFilter.le(fieldName, datastoreValue)
-                QueryFilterCondition.GREATER_THAN ->
+                FieldCondition.GREATER_THAN ->
                     PropertyFilter.gt(fieldName, datastoreValue)
-                QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
+                FieldCondition.GREATER_THAN_OR_EQUAL ->
                     PropertyFilter.ge(fieldName, datastoreValue)
             }
             is Boolean -> when (condition) {
-                QueryFilterCondition.EQUAL ->
+                FieldCondition.EQUAL ->
                     PropertyFilter.eq(fieldName, datastoreValue)
-                QueryFilterCondition.LESS_THAN ->
+                FieldCondition.LESS_THAN ->
                     PropertyFilter.lt(fieldName, datastoreValue)
-                QueryFilterCondition.LESS_THAN_OR_EQUAL ->
+                FieldCondition.LESS_THAN_OR_EQUAL ->
                     PropertyFilter.le(fieldName, datastoreValue)
-                QueryFilterCondition.GREATER_THAN ->
+                FieldCondition.GREATER_THAN ->
                     PropertyFilter.gt(fieldName, datastoreValue)
-                QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
+                FieldCondition.GREATER_THAN_OR_EQUAL ->
                     PropertyFilter.ge(fieldName, datastoreValue)
             }
             is Double -> when (condition) {
-                QueryFilterCondition.EQUAL ->
+                FieldCondition.EQUAL ->
                     PropertyFilter.eq(fieldName, datastoreValue)
-                QueryFilterCondition.LESS_THAN ->
+                FieldCondition.LESS_THAN ->
                     PropertyFilter.lt(fieldName, datastoreValue)
-                QueryFilterCondition.LESS_THAN_OR_EQUAL ->
+                FieldCondition.LESS_THAN_OR_EQUAL ->
                     PropertyFilter.le(fieldName, datastoreValue)
-                QueryFilterCondition.GREATER_THAN ->
+                FieldCondition.GREATER_THAN ->
                     PropertyFilter.gt(fieldName, datastoreValue)
-                QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
+                FieldCondition.GREATER_THAN_OR_EQUAL ->
                     PropertyFilter.ge(fieldName, datastoreValue)
             }
             is Long -> when (condition) {
-                QueryFilterCondition.EQUAL ->
+                FieldCondition.EQUAL ->
                     PropertyFilter.eq(fieldName, datastoreValue)
-                QueryFilterCondition.LESS_THAN ->
+                FieldCondition.LESS_THAN ->
                     PropertyFilter.lt(fieldName, datastoreValue)
-                QueryFilterCondition.LESS_THAN_OR_EQUAL ->
+                FieldCondition.LESS_THAN_OR_EQUAL ->
                     PropertyFilter.le(fieldName, datastoreValue)
-                QueryFilterCondition.GREATER_THAN ->
+                FieldCondition.GREATER_THAN ->
                     PropertyFilter.gt(fieldName, datastoreValue)
-                QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
+                FieldCondition.GREATER_THAN_OR_EQUAL ->
                     PropertyFilter.ge(fieldName, datastoreValue)
             }
             is String -> when (condition) {
-                QueryFilterCondition.EQUAL ->
+                FieldCondition.EQUAL ->
                     PropertyFilter.eq(fieldName, datastoreValue)
-                QueryFilterCondition.LESS_THAN ->
+                FieldCondition.LESS_THAN ->
                     PropertyFilter.lt(fieldName, datastoreValue)
-                QueryFilterCondition.LESS_THAN_OR_EQUAL ->
+                FieldCondition.LESS_THAN_OR_EQUAL ->
                     PropertyFilter.le(fieldName, datastoreValue)
-                QueryFilterCondition.GREATER_THAN ->
+                FieldCondition.GREATER_THAN ->
                     PropertyFilter.gt(fieldName, datastoreValue)
-                QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
+                FieldCondition.GREATER_THAN_OR_EQUAL ->
                     PropertyFilter.ge(fieldName, datastoreValue)
             }
             is Timestamp -> when (condition) {
-                QueryFilterCondition.EQUAL ->
+                FieldCondition.EQUAL ->
                     PropertyFilter.eq(fieldName, datastoreValue)
-                QueryFilterCondition.LESS_THAN ->
+                FieldCondition.LESS_THAN ->
                     PropertyFilter.lt(fieldName, datastoreValue)
-                QueryFilterCondition.LESS_THAN_OR_EQUAL ->
+                FieldCondition.LESS_THAN_OR_EQUAL ->
                     PropertyFilter.le(fieldName, datastoreValue)
-                QueryFilterCondition.GREATER_THAN ->
+                FieldCondition.GREATER_THAN ->
                     PropertyFilter.gt(fieldName, datastoreValue)
-                QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
+                FieldCondition.GREATER_THAN_OR_EQUAL ->
                     PropertyFilter.ge(fieldName, datastoreValue)
             }
             is DatastoreKey -> when (condition) {
-                QueryFilterCondition.EQUAL ->
+                FieldCondition.EQUAL ->
                     PropertyFilter.eq(fieldName, datastoreValue)
-                QueryFilterCondition.LESS_THAN ->
+                FieldCondition.LESS_THAN ->
                     PropertyFilter.lt(fieldName, datastoreValue)
-                QueryFilterCondition.LESS_THAN_OR_EQUAL ->
+                FieldCondition.LESS_THAN_OR_EQUAL ->
                     PropertyFilter.le(fieldName, datastoreValue)
-                QueryFilterCondition.GREATER_THAN ->
+                FieldCondition.GREATER_THAN ->
                     PropertyFilter.gt(fieldName, datastoreValue)
-                QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
+                FieldCondition.GREATER_THAN_OR_EQUAL ->
                     PropertyFilter.ge(fieldName, datastoreValue)
             }
             null -> when (condition) {
-                QueryFilterCondition.EQUAL ->
+                FieldCondition.EQUAL ->
                     PropertyFilter.eq(fieldName, NullValue())
-                QueryFilterCondition.LESS_THAN ->
+                FieldCondition.LESS_THAN ->
                     PropertyFilter.lt(fieldName, NullValue())
-                QueryFilterCondition.LESS_THAN_OR_EQUAL ->
+                FieldCondition.LESS_THAN_OR_EQUAL ->
                     PropertyFilter.le(fieldName, NullValue())
-                QueryFilterCondition.GREATER_THAN ->
+                FieldCondition.GREATER_THAN ->
                     PropertyFilter.gt(fieldName, NullValue())
-                QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
+                FieldCondition.GREATER_THAN_OR_EQUAL ->
                     PropertyFilter.ge(fieldName, NullValue())
             }
             // TODO(colin): implement querying on other supported property
@@ -142,6 +147,11 @@ data class QueryFilter(
         }
 }
 
+data class AncestorQueryFilter(val value: Key<*>) : QueryFilter() {
+    internal override fun toDatastoreFilter(): PropertyFilter =
+        PropertyFilter.hasAncestor(value.toDatastoreKey())
+}
+
 /**
  * Builder DSL for (non-type-safe) queries.
  *
@@ -150,8 +160,8 @@ data class QueryFilter(
 class QueryFilterBuilder {
     var properties: List<Property> = listOf()
 
-    fun property(name: String): Property {
-        val newProperty = Property(name)
+    fun fieldProperty(name: String): Property.FieldProperty {
+        val newProperty = Property.FieldProperty(name)
         properties += newProperty
         return newProperty
     }
@@ -161,70 +171,98 @@ class QueryFilterBuilder {
     }
 
     infix fun String.eq(other: Any?) {
-        property(this) eq other
+        fieldProperty(this) eq other
     }
 
     infix fun String.lt(other: Any?) {
-        property(this) lt other
+        fieldProperty(this) lt other
     }
 
     infix fun String.gt(other: Any?) {
-        property(this) gt other
+        fieldProperty(this) gt other
     }
 
     infix fun String.le(other: Any?) {
-        property(this) le other
+        fieldProperty(this) le other
     }
 
     infix fun String.ge(other: Any?) {
-        property(this) ge other
+        fieldProperty(this) ge other
+    }
+
+    // TODO(benkraft): This should really also accept a List<KeyPathElement>,
+    // since the ancestor key need not be the key of a real model-kind but a
+    // Key<*> does.  In practice, we usually use a real kind (although not
+    // necessarily a real key) so this is fine, and List<KeyPathElement> is a
+    // bit icky anyway.
+    fun hasAncestor(key: Key<*>) {
+        val newProperty = Property.AncestorProperty()
+        properties += newProperty
+        newProperty hasAncestor key
     }
 
     companion object {
-        class Property(private val name: String) {
-            var operation: QueryFilterCondition? = null
-            var filterValue: Any? = null
-            override operator fun equals(other: Any?): Boolean {
-                operation = QueryFilterCondition.EQUAL
-                filterValue = other
+        sealed class Property {
+            internal abstract fun toQueryFilter(): QueryFilter
 
-                return super.equals(other)
+            // TODO(benkraft): It might be cleaner to have these as siblings of
+            // Property, but apparently subclasses of sealed classes on the
+            // companion object still need to be members of the parent class
+            // rather than merely in the same file.  Perhaps a kotlin bug?
+            class FieldProperty(private val name: String) : Property() {
+                var operation: FieldCondition? = null
+                var filterValue: Any? = null
+
+                // We have to use `eq` instead of == because of
+                // https://youtrack.jetbrains.com/issue/KT-29316
+                // which will be fixed in an upcoming kotlin release.
+                infix fun eq(other: Any?) {
+                    operation = FieldCondition.EQUAL
+                    filterValue = other
+                }
+
+                infix fun lt(other: Any?) {
+                    operation = FieldCondition.LESS_THAN
+                    filterValue = other
+                }
+
+                infix fun gt(other: Any?) {
+                    operation = FieldCondition.GREATER_THAN
+                    filterValue = other
+                }
+
+                infix fun le(other: Any?) {
+                    operation = FieldCondition.LESS_THAN_OR_EQUAL
+                    filterValue = other
+                }
+
+                infix fun ge(other: Any?) {
+                    operation = FieldCondition.GREATER_THAN_OR_EQUAL
+                    filterValue = other
+                }
+
+                internal override fun toQueryFilter(): QueryFilter {
+                    return FieldQueryFilter(
+                        name,
+                        operation ?: throw IllegalArgumentException(
+                            "You must provide an operation in a query."),
+                        filterValue
+                    )
+                }
             }
 
-            // We have to use `eq` instead of == because of
-            // https://youtrack.jetbrains.com/issue/KT-29316
-            // which will be fixed in an upcoming kotlin release.
-            infix fun eq(other: Any?): Boolean {
-                return this.equals(other)
-            }
+            class AncestorProperty() : Property() {
+                var filterValue: Key<*>? = null
 
-            infix fun lt(other: Any?) {
-                operation = QueryFilterCondition.LESS_THAN
-                filterValue = other
-            }
+                infix fun hasAncestor(key: Key<*>) {
+                    filterValue = key
+                }
 
-            infix fun gt(other: Any?) {
-                operation = QueryFilterCondition.GREATER_THAN
-                filterValue = other
-            }
-
-            infix fun le(other: Any?) {
-                operation = QueryFilterCondition.LESS_THAN_OR_EQUAL
-                filterValue = other
-            }
-
-            infix fun ge(other: Any?) {
-                operation = QueryFilterCondition.GREATER_THAN_OR_EQUAL
-                filterValue = other
-            }
-
-            internal fun toQueryFilter(): QueryFilter {
-                return QueryFilter(
-                    name,
-                    operation ?: throw IllegalArgumentException(
-                        "You must provide an operation in a query."),
-                    filterValue
-                )
+                internal override fun toQueryFilter(): QueryFilter {
+                    return AncestorQueryFilter(
+                        filterValue ?: throw IllegalArgumentException(
+                            "You must provide an operation in a query."))
+                }
             }
         }
     }

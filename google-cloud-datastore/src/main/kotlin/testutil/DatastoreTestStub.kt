@@ -341,11 +341,28 @@ internal operator fun Value.compareTo(other: Value): Int {
 }
 
 /**
+ * Return a list of the ancestors (prefixes) of this key, including itself.
+ *
+ * For example, Key("A", 1, "B", 2, "C", 3).ancestors(), would return
+ * Key("A", 1, "B", 2, "C", 3), Key("A", 1, "B", 2), Key("A", 1).
+ */
+private fun Key.ancestors(): List<Key> {
+    var key: Key? = this
+    val ancestors = mutableListOf<Key>()
+    while (key != null) {
+        ancestors.add(key)
+        key = key.parent
+    }
+    return ancestors
+}
+
+/**
  * Does the provided entity match the given filter?
  *
  * We treat missing values on the entity as `null`.
  */
 internal fun entityMatches(
+    entityKey: Key,
     entityValue: Value,
     filter: PropertyFilter
 ): Boolean {
@@ -375,7 +392,14 @@ internal fun entityMatches(
         PropertyFilter.Operator.LESS_THAN_OR_EQUAL ->
             entityValue <= filterValue
         PropertyFilter.Operator.HAS_ANCESTOR ->
-            TODO("Implement ancestor queries.")
+            // TODO(benkraft): The caller does a bit of extra -- and
+            // semantically questionable -- work in this case, namely
+            // extracting out entityValue despite knowing it won't exist (since
+            // the name is the magic __key__) and we won't need it (we want to
+            // look at entity.key).  But none of it errors (we just get the
+            // null value), so we don't worry about it!
+            entityKey.ancestors().contains(
+                DatastoreTypeConverter.keyFromPb(filterValue.keyValue))
         PropertyFilter.Operator.OPERATOR_UNSPECIFIED,
         PropertyFilter.Operator.UNRECOGNIZED,
         null ->
@@ -439,7 +463,9 @@ class MockDatastore(private var entities: List<Entity>) : ThrowingDatastore() {
             entityValue.valueTypeCase == Value.ValueTypeCase.ARRAY_VALUE &&
             filters[0].isInequalityFilter() ->
                 entityValue.arrayValue.valuesList.any { value ->
-                    filters.all { filter -> entityMatches(value, filter) }
+                    filters.all {
+                        filter -> entityMatches(entity.key, value, filter)
+                    }
                 }
 
             entityValue.valueTypeCase == Value.ValueTypeCase.ARRAY_VALUE ->
@@ -448,13 +474,15 @@ class MockDatastore(private var entities: List<Entity>) : ThrowingDatastore() {
                 // filter passes if the filter-string is present in our array.
                 filters.all { filter ->
                     entityValue.arrayValue.valuesList.any { value ->
-                        entityMatches(value, filter)
+                        entityMatches(entity.key, value, filter)
                     }
                 }
 
             else ->
                 // Non-array case, very straightforward.
-                filters.all { filter -> entityMatches(entityValue, filter) }
+                filters.all {
+                    filter -> entityMatches(entity.key, entityValue, filter)
+                }
         }
     }
 
