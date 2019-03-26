@@ -30,7 +30,8 @@ data class TestQueryKind(
     val aString: String,
     val aNullableLong: Long?,
     val aTimestamp: LocalDateTime,
-    val aKey: Key<TestKind>
+    val aKey: Key<TestKind>,
+    val manyStrings: List<String?>
 ) : Keyed<TestQueryKind>
 
 class DatastoreTestStubTest : StringSpec({
@@ -96,14 +97,16 @@ class DatastoreTestStubTest : StringSpec({
             aString = "a",
             aNullableLong = 42,
             aTimestamp = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC),
-            aKey = Key("TestKind", 1)
+            aKey = Key("TestKind", 1),
+            manyStrings = listOf("4", "2")
         ),
         TestQueryKind(
             key = Key("TestQueryKind", 2),
             aString = "b",
             aNullableLong = null,
             aTimestamp = LocalDateTime.ofEpochSecond(1, 0, ZoneOffset.UTC),
-            aKey = Key("TestKind", 2)
+            aKey = Key("TestKind", 2),
+            manyStrings = listOf()
         ),
         TestQueryKind(
             key = Key("TestQueryKind", 3),
@@ -112,15 +115,16 @@ class DatastoreTestStubTest : StringSpec({
             aTimestamp = LocalDateTime.ofEpochSecond(1, 1, ZoneOffset.UTC),
             aKey = Key(
                 "TestKind", 1,
-                parentPath = listOf(KeyPathElement("AParentKind", KeyID(1))))
-
+                parentPath = listOf(KeyPathElement("AParentKind", KeyID(1)))),
+            manyStrings = listOf(null, null, null)
         ),
         TestQueryKind(
             key = Key("TestQueryKind", 4),
             aString = "d",
             aNullableLong = -42,
             aTimestamp = LocalDateTime.ofEpochSecond(2, 0, ZoneOffset.UTC),
-            aKey = Key("TestKind", "some-string-key")
+            aKey = Key("TestKind", "some-string-key"),
+            manyStrings = listOf("2", "4", "", null, "42")
         ),
         TestKind(
             key = Key("TestKind", 1)
@@ -155,6 +159,41 @@ class DatastoreTestStubTest : StringSpec({
             }.toList()
             result.size shouldBe 1
             result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 1)
+        }
+    }
+
+    "It should correctly evaluate simple list equality queries" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>("TestQueryKind") {
+                "manyStrings" eq "4"
+            }.toList()
+            result.size shouldBe 2
+            result.map { (it.key.idOrName as KeyID).value } shouldBe
+                listOf(1L, 4L)
+        }
+    }
+
+    "It should correctly evaluate multiple list equality queries" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>("TestQueryKind") {
+                "manyStrings" eq "4"
+                "manyStrings" eq "42"
+            }.toList()
+            result.size shouldBe 1
+            result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 4)
+        }
+    }
+
+    "It should correctly evaluate list inequality queries" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>("TestQueryKind") {
+                "manyStrings" gt "41"
+                "manyStrings" lt "3"
+            }.toList()
+            // This does not match: while we have an entity that has
+            // both a manyString < "3" and a manyString > "41", we
+            // don't have a list-value that satisfies both conditions.
+            result.size shouldBe 0
         }
     }
 

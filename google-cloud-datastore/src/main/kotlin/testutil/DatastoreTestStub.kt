@@ -345,14 +345,15 @@ internal operator fun Value.compareTo(other: Value): Int {
  *
  * We treat missing values on the entity as `null`.
  */
-internal fun entityMatches(entity: Entity, filter: PropertyFilter): Boolean {
+internal fun entityMatches(
+    entityValue: Value,
+    filter: PropertyFilter
+): Boolean {
     val filterValue = filter.value
-    val entityValue = DatastoreTypeConverter.entityToPb(entity)
-        .propertiesMap[filter.property.name]
-        ?: Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build()
 
-    // TODO(colin): when implementing repeated values, we'll need to take that
-    // into account here.
+    // matchesFilters(), the caller of entityMatches(), should have
+    // already filtered out the array case.
+    assert(entityValue.valueTypeCase != Value.ValueTypeCase.ARRAY_VALUE)
 
     // TODO(colin): should we complain if
     //    filter.value.valueTypeCase != entityValue.valueTypeCase
@@ -383,6 +384,16 @@ internal fun entityMatches(entity: Entity, filter: PropertyFilter): Boolean {
     }
 }
 
+private fun PropertyFilter.isInequalityFilter(): Boolean {
+    return when (op) {
+        PropertyFilter.Operator.GREATER_THAN,
+        PropertyFilter.Operator.GREATER_THAN_OR_EQUAL,
+        PropertyFilter.Operator.LESS_THAN,
+        PropertyFilter.Operator.LESS_THAN_OR_EQUAL -> true
+        else -> false
+    }
+}
+
 /**
  * Datastore implementation that uses a list of entities as its fake contents.
  *
@@ -403,6 +414,50 @@ class MockDatastore(private var entities: List<Entity>) : ThrowingDatastore() {
         return entityConverted
     }
 
+    // Checks that we match all filters that have the same name and
+    // is-inequality status.  For instance, filters might be
+    // `(myint > 4, myint < 6)` -- but would never be
+    // `(myint > 4, myint = 5)`.
+    private fun matchesFiltersForField(
+        entity: Entity,
+        filters: List<PropertyFilter>
+    ): Boolean {
+        val filterName = filters[0].property.name
+        val entityValue = DatastoreTypeConverter.entityToPb(entity)
+            .propertiesMap[filterName]
+            ?: Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build()
+
+        // If we have an array-value and inequality filters, we have
+        // to use this rule: the entity passes if there is some value
+        // in the array which passes all the inequalities.  For
+        // instance if we have '(myint > 4, myint < 6)', and our array
+        // values are [3, 10], we do *not* pass because neither array
+        // value passes both inequalities.
+        // Note if filters[0] is an inequality filter, they all are,
+        // because of how we grouped the filters.
+        return when {
+            entityValue.valueTypeCase == Value.ValueTypeCase.ARRAY_VALUE &&
+            filters[0].isInequalityFilter() ->
+                entityValue.arrayValue.valuesList.any { value ->
+                    filters.all { filter -> entityMatches(value, filter) }
+                }
+
+            entityValue.valueTypeCase == Value.ValueTypeCase.ARRAY_VALUE ->
+                // This is equality for arrays, we do the "normal"
+                // thing where we match filter-by-filter: each equality
+                // filter passes if the filter-string is present in our array.
+                filters.all { filter ->
+                    entityValue.arrayValue.valuesList.any { value ->
+                        entityMatches(value, filter)
+                    }
+                }
+
+            else ->
+                // Non-array case, very straightforward.
+                filters.all { filter -> entityMatches(entityValue, filter) }
+        }
+    }
+
     private fun runEntities(query: Query<*>?): List<Entity> {
         val structuredQuery = query as? StructuredQuery<*>
             ?: throw NotImplementedError(
@@ -417,11 +472,26 @@ class MockDatastore(private var entities: List<Entity>) : ThrowingDatastore() {
             listOf(filter.propertyFilter)
         }
 
+        // Most of the time, an entity passes a list of filters if it
+        // passes each filter individually.  However, there is a
+        // special case, as documented at
+        // https://cloud.google.com/datastore/docs/concepts/queries#array_values
+        // This case is inequality filters on array values.  For those
+        // filters, we need to consider the filters *as a group*, not
+        // just one at a time.  To help with that, we group filters
+        // by <name, is_inequality_filter>.
+        val filtersByNameAndType = allFilters.groupBy {
+            Pair(it.property.name, it.isInequalityFilter())
+        }
+
         return entities
+            .filter { entity -> entity.key.kind == query.kind }
             .filter { entity ->
-                entity.key.kind == query.kind
-            }.filter { entity ->
-                allFilters.all { filter -> entityMatches(entity, filter) }
+                // We consider each filter-group in sequence, the
+                // entity has to pass them all.
+                filtersByNameAndType.all { entry ->
+                    matchesFiltersForField(entity, entry.value)
+                }
             }
     }
 
