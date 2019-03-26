@@ -273,13 +273,43 @@ internal fun KeyPb.compareTo(other: KeyPb): Int {
     }
 }
 
+// Used to order values of different types, as per
+// https://cloud.google.com/datastore/docs/concepts/entities#value_type_ordering
+private fun Value.typeIndex(): Int =
+    when (valueTypeCase) {
+        Value.ValueTypeCase.NULL_VALUE -> 1
+        Value.ValueTypeCase.INTEGER_VALUE,
+        Value.ValueTypeCase.TIMESTAMP_VALUE -> 2
+        Value.ValueTypeCase.BOOLEAN_VALUE -> 3
+        // The docs say "byte strings" sort before "unicode strings".
+        // I'm taking the first to mean "blob" and the second "string".
+        Value.ValueTypeCase.BLOB_VALUE -> 4
+        Value.ValueTypeCase.STRING_VALUE -> 5
+        Value.ValueTypeCase.DOUBLE_VALUE -> 6
+        Value.ValueTypeCase.GEO_POINT_VALUE -> 7
+        Value.ValueTypeCase.KEY_VALUE -> 8
+        Value.ValueTypeCase.ENTITY_VALUE,
+        Value.ValueTypeCase.ARRAY_VALUE ->
+            throw IllegalArgumentException(
+                "Callers should be comparing list/entity values explicitly.")
+        Value.ValueTypeCase.VALUETYPE_NOT_SET, null ->
+            throw IllegalArgumentException(
+                "Cannot query on values of unknown type.")
+    }
+
 /**
  * Implementation of java.lang.Comparable for Values, used in query conditions.
  *
  * We assume that both values are of the same type.
  */
 internal operator fun Value.compareTo(other: Value): Int {
-    return when (valueTypeCase) {
+    // First, handle the case the values are of different types.
+    val indexCmp = typeIndex().compareTo(other.typeIndex())
+    if (indexCmp != 0) {
+        return indexCmp
+    }
+    return when(valueTypeCase) {
+        // Now, handle the (common) case the values are of the same type.
         Value.ValueTypeCase.NULL_VALUE -> 0
         Value.ValueTypeCase.BOOLEAN_VALUE ->
             this.booleanValue.compareTo(other.booleanValue)
@@ -294,8 +324,7 @@ internal operator fun Value.compareTo(other: Value): Int {
         Value.ValueTypeCase.STRING_VALUE ->
             this.stringValue.compareTo(other.stringValue)
         Value.ValueTypeCase.BLOB_VALUE ->
-            throw IllegalArgumentException(
-                "Cannot query on blob values.")
+            throw IllegalArgumentException("Cannot query on blob values.")
         Value.ValueTypeCase.GEO_POINT_VALUE ->
             TODO("Implement geo point properties")
         Value.ValueTypeCase.ENTITY_VALUE ->
@@ -304,7 +333,10 @@ internal operator fun Value.compareTo(other: Value): Int {
             TODO("Implement repeated properties")
         Value.ValueTypeCase.VALUETYPE_NOT_SET, null ->
             throw IllegalArgumentException(
-                "Cannot query on values of unknown type.")
+                "Cannot query on values of unknown type (value ${this}).")
+        else ->
+            throw IllegalArgumentException(
+                "Unhandled value type case ${valueTypeCase}.")
     }
 }
 
@@ -314,20 +346,17 @@ internal operator fun Value.compareTo(other: Value): Int {
  * We treat missing values on the entity as `null`.
  */
 internal fun entityMatches(entity: Entity, filter: PropertyFilter): Boolean {
-    val name = filter.property.name
     val filterValue = filter.value
     val entityValue = DatastoreTypeConverter.entityToPb(entity)
-        .propertiesMap[name]
+        .propertiesMap[filter.property.name]
         ?: Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build()
 
     // TODO(colin): when implementing repeated values, we'll need to take that
     // into account here.
 
-    // TODO(colin): should we throw here? This probably represents a
-    // programming error if we hit this condition?
-    if (filterValue.valueTypeCase != entityValue.valueTypeCase) {
-        return false
-    }
+    // TODO(colin): should we complain if
+    //    filter.value.valueTypeCase != entityValue.valueTypeCase
+    // and neither is null?  This is probably a programming error.
 
     return when (filter.op) {
         PropertyFilter.Operator.EQUAL ->
@@ -388,11 +417,12 @@ class MockDatastore(private var entities: List<Entity>) : ThrowingDatastore() {
             listOf(filter.propertyFilter)
         }
 
-        return entities.filter { entity ->
-            allFilters.all { filter ->
-                entityMatches(entity, filter)
+        return entities
+            .filter { entity ->
+                entity.key.kind == query.kind
+            }.filter { entity ->
+                allFilters.all { filter -> entityMatches(entity, filter) }
             }
-        }
     }
 
     private fun runKeys(query: Query<*>?): List<DatastoreKey> =

@@ -28,6 +28,7 @@ data class TestKind(
 data class TestQueryKind(
     override val key: Key<TestQueryKind>,
     val aString: String,
+    val aNullableLong: Long?,
     val aTimestamp: LocalDateTime,
     val aKey: Key<TestKind>
 ) : Keyed<TestQueryKind>
@@ -93,18 +94,21 @@ class DatastoreTestStubTest : StringSpec({
         TestQueryKind(
             key = Key("TestQueryKind", 1),
             aString = "a",
+            aNullableLong = 42,
             aTimestamp = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC),
             aKey = Key("TestKind", 1)
         ),
         TestQueryKind(
             key = Key("TestQueryKind", 2),
             aString = "b",
+            aNullableLong = null,
             aTimestamp = LocalDateTime.ofEpochSecond(1, 0, ZoneOffset.UTC),
             aKey = Key("TestKind", 2)
         ),
         TestQueryKind(
             key = Key("TestQueryKind", 3),
             aString = "c",
+            aNullableLong = 0,
             aTimestamp = LocalDateTime.ofEpochSecond(1, 1, ZoneOffset.UTC),
             aKey = Key(
                 "TestKind", 1,
@@ -114,6 +118,7 @@ class DatastoreTestStubTest : StringSpec({
         TestQueryKind(
             key = Key("TestQueryKind", 4),
             aString = "d",
+            aNullableLong = -42,
             aTimestamp = LocalDateTime.ofEpochSecond(2, 0, ZoneOffset.UTC),
             aKey = Key("TestKind", "some-string-key")
         ),
@@ -227,6 +232,27 @@ class DatastoreTestStubTest : StringSpec({
             result.size shouldBe 3
             result.map { (it.idOrName as KeyID).value } shouldBe
                 listOf(1L, 2L, 3L)
+        }
+    }
+
+    "It should correctly compare numbers to null" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>("TestQueryKind") {
+                "aNullableLong" lt 0L
+            }.toList()
+            result.size shouldBe 2
+            result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 2)
+            result[1].key shouldBe Key<TestQueryKind>("TestQueryKind", 4)
+        }
+    }
+
+    "It should correctly find null" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>("TestQueryKind") {
+                "aNullableLong" eq null
+            }.toList()
+            result.size shouldBe 1
+            result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 2)
         }
     }
 })

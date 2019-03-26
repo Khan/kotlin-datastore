@@ -12,6 +12,7 @@ package org.khanacademy.datastore
 
 import com.google.cloud.Timestamp
 import com.google.cloud.datastore.Blob
+import com.google.cloud.datastore.NullValue
 import com.google.cloud.datastore.StructuredQuery.PropertyFilter
 
 enum class QueryFilterCondition {
@@ -121,10 +122,23 @@ data class QueryFilter(
                 QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
                     PropertyFilter.ge(fieldName, datastoreValue)
             }
+            null -> when (condition) {
+                QueryFilterCondition.EQUAL ->
+                    PropertyFilter.eq(fieldName, NullValue())
+                QueryFilterCondition.LESS_THAN ->
+                    PropertyFilter.lt(fieldName, NullValue())
+                QueryFilterCondition.LESS_THAN_OR_EQUAL ->
+                    PropertyFilter.le(fieldName, NullValue())
+                QueryFilterCondition.GREATER_THAN ->
+                    PropertyFilter.gt(fieldName, NullValue())
+                QueryFilterCondition.GREATER_THAN_OR_EQUAL ->
+                    PropertyFilter.ge(fieldName, NullValue())
+            }
             // TODO(colin): implement querying on other supported property
             // types. See EntityConversion.kt for a more comprehensive list.
             else -> throw IllegalArgumentException(
-                "Unable to query on property $fieldName")
+                "Unable to query on property $fieldName " +
+                "(value $datastoreValue)")
         }
 }
 

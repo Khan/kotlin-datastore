@@ -272,11 +272,13 @@ private val TimestampTypes = listOf(
  */
 internal fun <T : Keyed<T>> Entity.getExistingTypedProperty(
     name: String, type: KType
-): Any? = fromDatastoreType(when (type) {
+): Any? = fromDatastoreType(when(type) {
     in ByteArrayTypes -> getBlob(name)
-    in BooleanTypes -> getBoolean(name)
-    in DoubleTypes -> getDouble(name)
-    in LongTypes -> getLong(name)
+    // Kotlin doesn't correctly box these basic types as nullable, so
+    // we need to do explicit checks ourselves.
+    in BooleanTypes -> if (isNull(name)) null else getBoolean(name)
+    in DoubleTypes -> if (isNull(name)) null else getDouble(name)
+    in LongTypes -> if (isNull(name)) null else getLong(name)
     in StringTypes -> getString(name)
     in TimestampTypes -> getTimestamp(name)
     // The datastore does not distinguish `null` from the empty list, instead
@@ -287,7 +289,8 @@ internal fun <T : Keyed<T>> Entity.getExistingTypedProperty(
     List::class.createType(type.arguments) ->
         getList<Value<*>>(name).map { fromDatastoreType(it.get()) }
     Key::class.createType(type.arguments),
-    Key::class.createType(type.arguments).withNullability(true) -> getKey(name)
+    Key::class.createType(type.arguments).withNullability(true) ->
+        getKey(name)
     // TODO(colin): nested entities
     // TODO(colin): location (lat/lng) properties
     // TODO(colin): repeated properties

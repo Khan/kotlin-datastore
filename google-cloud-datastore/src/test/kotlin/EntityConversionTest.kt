@@ -20,11 +20,13 @@ import java.time.ZoneOffset
 data class PrimitiveTestModel(
     val aKey: Key<SecondaryTestModel>?,
     val aString: String?,
-    val aLong: Long,
-    val aBool: Boolean,
-    val aDouble: Double,
-    val someBytes: ByteArray,
+    val aLong: Long?,
+    val aBool: Boolean?,
+    val aDouble: Double?,
+    val someBytes: ByteArray?,
     val aTimestamp: LocalDateTime?,
+    val nonNullableBool: Boolean,
+    val nonNullableBytes: ByteArray,
     override val key: Key<PrimitiveTestModel>
 ) : Keyed<PrimitiveTestModel>
 
@@ -67,6 +69,8 @@ class EntityConversionTest : StringSpec({
             .set("aDouble", 2.71828)
             .set("aTimestamp", Timestamp.ofTimeSecondsAndNanos(0, 0))
             .set("someBytes", Blob.copyFrom("abcdefg".toByteArray()))
+            .set("nonNullableBool", false)
+            .set("nonNullableBytes", Blob.copyFrom("hijklmn".toByteArray()))
             .build()
 
         val converted = entity.toTypedModel(PrimitiveTestModel::class)
@@ -80,7 +84,7 @@ class EntityConversionTest : StringSpec({
         converted.aTimestamp shouldBe LocalDateTime.ofInstant(
             Instant.EPOCH,
             ZoneId.of("UTC"))
-        String(converted.someBytes) shouldBe "abcdefg"
+        String(converted.someBytes ?: ByteArray(0)) shouldBe "abcdefg"
     }
 
     "It should throw if the entity doesn't match the data class's type" {
@@ -104,9 +108,9 @@ class EntityConversionTest : StringSpec({
         val entity = Entity.newBuilder(datastoreKey)
             .set("aString", "abcd")
             .set("aLong", 4L)
-            .set("aBool", true)
+            .set("nonNullableBool", NullValue())
             .set("aDouble", 2.71828)
-            .set("someBytes", NullValue())
+            .set("nonNullableBytes", NullValue())
             .build()
         shouldThrow<NullPointerException> {
             entity.toTypedModel(PrimitiveTestModel::class)
@@ -147,15 +151,20 @@ class EntityConversionTest : StringSpec({
         val entity = Entity.newBuilder(datastoreKey)
             .set("aKey", NullValue())
             .set("aString", NullValue())
-            .set("aLong", 4L)
-            .set("aBool", true)
-            .set("aDouble", 2.71828)
-            .set("someBytes", Blob.copyFrom("abcdefg".toByteArray()))
+            .set("aLong", NullValue())
+            .set("aBool", NullValue())
+            .set("aDouble", NullValue())
+            .set("someBytes", NullValue())
             .set("aTimestamp", NullValue())
+            .set("nonNullableBool", true)
+            .set("nonNullableBytes", Blob.copyFrom("not null!".toByteArray()))
             .build()
         val converted = entity.toTypedModel(PrimitiveTestModel::class)
         converted.aKey shouldBe null
         converted.aString shouldBe null
+        converted.aBool shouldBe null
+        converted.aDouble shouldBe null
+        converted.someBytes shouldBe null
         converted.aTimestamp shouldBe null
     }
 
@@ -172,6 +181,8 @@ class EntityConversionTest : StringSpec({
             aDouble = 9.0,
             someBytes = "byte_value".toByteArray(),
             aTimestamp = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC),
+            nonNullableBool = false,
+            nonNullableBytes = "byte_value_2".toByteArray(),
             key = testKey)
 
         val entity = testModel.toDatastoreEntity()
@@ -181,6 +192,9 @@ class EntityConversionTest : StringSpec({
         entity.getDouble("aDouble") shouldBe 9.0
         String(entity.getBlob("someBytes").toByteArray()) shouldBe "byte_value"
         entity.getTimestamp("aTimestamp").seconds shouldBe 0
+        entity.getBoolean("nonNullableBool") shouldBe false
+        String(entity.getBlob("nonNullableBytes").toByteArray()) shouldBe
+            "byte_value_2"
         entity.key.kind shouldBe "PrimitiveTestModel"
         entity.key.name shouldBe "the-first-one"
         entity.getKey("aKey").kind shouldBe "SecondaryTestModel"
@@ -198,6 +212,8 @@ class EntityConversionTest : StringSpec({
             aDouble = 9.0,
             someBytes = "byte_value".toByteArray(),
             aTimestamp = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC),
+            nonNullableBool = false,
+            nonNullableBytes = "byte_value_2".toByteArray(),
             key = testKey)
 
         val entity = testModel.toDatastoreEntity()
