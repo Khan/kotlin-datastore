@@ -30,19 +30,19 @@ Functionality planned prior to a first release:
 - [x] Datastore get-by-key
 - [x] Transactions
 - [x] Asynchronous operation (via kotlin coroutines)
-- [ ] Datastore queries (via a `Map`-like interface)
+- [x] Datastore queries (via a `Map`-like interface)
 - [x] Datastore writes
 - [ ] multi-get and -put
 - [x] Use of plain kotlin data classes to represent datstore models
 - [x] Reflective implementation of converting Google datastore client `Entity`s to data class instances
 - [x] Reflective implementation of converting data class instances to Google datastore client `Entity`s
 - [x] Annotations for assigning a different in-datastore name to a property
-- [ ] Annotations for choosing whether to index a property
+- [x] Annotations for choosing whether to index a property
 - [x] Primitive, nonrepeated properties
-- [ ] Repeated properties
-- [ ] Nested entity properties
+- [x] Repeated properties
+- [x] Nested entity properties
 - [x] Timestamp properties
-- [ ] Key properties
+- [x] Key properties
 - [ ] Location properties
 - [ ] Json properties
 - [x] Computed properties
