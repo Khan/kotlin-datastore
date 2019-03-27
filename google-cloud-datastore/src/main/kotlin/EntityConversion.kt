@@ -27,6 +27,7 @@ import org.khanacademy.metadata.KeyPathElement
 import org.khanacademy.metadata.Keyed
 import org.khanacademy.metadata.Meta
 import org.khanacademy.metadata.Property
+import org.khanacademy.metadata.StructuredProperty
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -37,10 +38,13 @@ import kotlin.reflect.KFunction
 import kotlin.reflect.KParameter
 import kotlin.reflect.KProperty
 import kotlin.reflect.KType
+import kotlin.reflect.KTypeProjection
+import kotlin.reflect.KVariance
 import kotlin.reflect.full.createType
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.full.findAnnotation
 import kotlin.reflect.full.isSubtypeOf
+import kotlin.reflect.full.memberProperties
 import kotlin.reflect.full.primaryConstructor
 import kotlin.reflect.full.valueParameters
 import kotlin.reflect.full.withNullability
@@ -210,7 +214,13 @@ internal fun FullEntity<*>.getTypedProperty(
     key?.kind,
     name,
     type,
-    if (name in this) {
+    if (name in this ||
+        // StructuredProperties do some weird property renaming, so their names
+        // should never be on the entity. They do their own handling of
+        // absence, and we treat them as if they're always present.
+        type.isStructuredPropertyType() ||
+        type.isStructuredPropertyListType()) {
+
         getExistingTypedProperty(name, type)
     } else {
         PROPERTY_NOT_PRESENT
@@ -334,6 +344,19 @@ private val EntityPropertyTypes = listOf(
     Property::class.createType().withNullability(true)
 )
 
+private fun KType.isStructuredPropertyType() =
+    arguments.isNotEmpty() && (
+        this == StructuredProperty::class.createType(arguments) ||
+        this == StructuredProperty::class.createType(arguments)
+            .withNullability(true)
+    )
+
+private fun KType.isStructuredPropertyListType() =
+    arguments.isNotEmpty() &&
+        this == List::class.createType(arguments) &&
+        arguments[0].type != null &&
+        arguments[0].type!!.isStructuredPropertyType()
+
 /**
  * Get the value of an entity's property, given that we know it's present.
  */
@@ -348,6 +371,13 @@ internal fun FullEntity<*>.getExistingTypedProperty(
     type in LongTypes -> if (isNull(name)) null else getLong(name)
     type in StringTypes -> getString(name)
     type in TimestampTypes -> getTimestamp(name)
+    type.isStructuredPropertyType() ->
+        getExistingStructuredProperty(name, type.arguments[0].type
+            ?: throw IllegalArgumentException(
+                "Cannot use star-projected structured properties"))
+    // This check must come before the generic list check below.
+    type.isStructuredPropertyListType() ->
+        getExistingStructuredProperty(name, type, repeated = true)
     // The datastore does not distinguish `null` from the empty list, instead
     // treating them both as the empty list.
     // Therefore we don't allow nullable repeated values; use the empty list
@@ -359,15 +389,15 @@ internal fun FullEntity<*>.getExistingTypedProperty(
         val innerType = type.arguments[0].type
             ?: throw IllegalArgumentException(
                 "Repeated properties cannot use star-projected types.")
-        getList<Value<*>>(name).map { fromDatastoreType(it.get(), innerType) }
+        getList<Value<*>>(name).map {
+            fromDatastoreType(it.get(), innerType)
+        }
     }
     type.arguments.isNotEmpty() && (
         type == Key::class.createType(type.arguments) ||
         type == Key::class.createType(type.arguments).withNullability(true)) ->
         getKey(name)
-    // TODO(colin): nested entities
     // TODO(colin): location (lat/lng) properties
-    // TODO(colin): repeated properties
     // TODO(colin): JSON properties
     // TODO(colin): computed properties (do we need these?)
     // TODO(colin): in general we want to support all ndb property types, see:
@@ -377,6 +407,120 @@ internal fun FullEntity<*>.getExistingTypedProperty(
     else -> throw IllegalArgumentException(
         "Unable to use property $name of type $type as a datastore property")
 }, type)
+
+/**
+ * Extract the data associated with a StructuredProperty (from python ndb).
+ *
+ * For compatibility, we store this not as a nested protobuf, but as a series
+ * of flattened top-level properties with dot-delimited names like
+ * `base.field`. When we have a structured property, we need to swap in
+ * extraction of these flattened properties, then transform it back to the
+ * nested object we're expecting in kotlin.
+ *
+ * TODO(colin): should we assert that you can't have a repeated property with
+ * repeated fields? That's kind of covered by the other assertions, just not
+ * explicitly.
+ */
+internal fun FullEntity<*>.getExistingStructuredProperty(
+    name: String,
+    // This may either be the KType for the property data class itself,
+    // or for a List<StructuredProperty<T>> if repeated
+    targetType: KType,
+    // Is the whole structuredProperty repeated (i.e. a list)?
+    repeated: Boolean = false
+): Any? {
+    val innerType = if (repeated) {
+        targetType.arguments[0].type // unwrap List<T> -> T
+        ?.arguments?.get(0)?.type // unwrap StructuredProperty<T> -> T
+        ?: throw IllegalArgumentException(
+            "Cannot use star-projected structured properties")
+    } else {
+        targetType
+    }
+    val constructor = assertedPrimaryConstructor(innerType.jvmErasure)
+    val constructorParams = constructor.valueParameters
+        // We don't expect nested entities to have a key, and for root
+        // entities, we'll already have gotten the key because it's required by
+        // the Entity.Builder constructor.
+        .filter { it.name != "key" }
+        .map { kParameter ->
+            val propertyName = datastoreName(kParameter)
+                ?: throw IllegalArgumentException(
+                    "Unable to use nameless parameter $kParameter " +
+                        "on $targetType as a datastore property")
+            val mungedName = "$name.$propertyName"
+            if (kParameter.type.isStructuredPropertyType()) {
+                // TODO(colin): do we need to add support for nested structured
+                // properties?
+                throw NotImplementedError(
+                    "Nested StructuredProperties are not yet supported.")
+            }
+            // Repeated structured properties, due to the flattening, end up as
+            // individually repeated top-level types. Thus, we need to change
+            // this type to a List if the whole property is repeated.
+            val mungedType = if (repeated) {
+                List::class.createType(listOf(
+                    KTypeProjection(KVariance.INVARIANT, kParameter.type)))
+            } else {
+                kParameter.type
+            }
+            kParameter to getTypedProperty(
+                mungedName,
+                mungedType
+            )
+        }
+        .toMap()
+
+    val presentConstructorParams = constructorParams
+        .filter { (_, value) -> value !== PROPERTY_NOT_PRESENT }
+
+    if (!repeated) {
+        return StructuredProperty(constructor.callBy(presentConstructorParams))
+    }
+
+    // Now, if this property was repeated we have to un-flatten the
+    // individually repeated fields into one top-level repeated structured
+    // property.
+    // Let's first validate that each property has the same number of values
+    // and error loudly now if that assumption is violated.
+    val numValues =
+        (presentConstructorParams.values.firstOrNull() as? List<*>
+            ?: listOf<Any?>())
+        .size
+
+    if (presentConstructorParams.values.any {
+            (it as List<*>).size != numValues
+        }) {
+
+        throw IllegalStateException(
+            "Repeated structured property $name of type $targetType did not " +
+                "have the same number of values for each field.")
+    }
+
+    return (0 until numValues).map { i ->
+        val singleParams = constructorParams
+            .mapValues { (kParameter, value) ->
+                if (value == PROPERTY_NOT_PRESENT) {
+                    if (kParameter.isOptional) {
+                        // If a default was provided, throw, since it's not
+                        // clear how those should interact with the flattening.
+                        // TODO(colin): come up with a more principled system
+                        // for defaults here.
+                        throw IllegalArgumentException(
+                            "Default values are not allowed for repeated " +
+                                "structured properties.")
+                    }
+                    listOf<Any?>()
+                } else {
+                    value
+                }
+            }
+            .map { (kParameter, value) ->
+            kParameter to (value as List<*>)[i]
+        }.toMap()
+        StructuredProperty(constructor.callBy(singleParams))
+    }
+}
 
 /**
  * Convert a kotlin-typed value to a datastore Value<V> type.
@@ -478,5 +622,52 @@ internal fun <P> BaseEntity.Builder<*, *>.setTypedProperty(
             ?: parameter?.let(::metaAnnotationIndexed)
             ?: false
 
-    set(name, propertyValueToDatastoreValue(name, propertyValue, indexed))
+    // ndb-compatible StructuredProperties are flattened out into a number of
+    // top-level fields.
+    if (propertyValue is StructuredProperty<*>) {
+        val propertyTypeConstructor = assertedPrimaryConstructor(
+            property.returnType.arguments[0].type?.jvmErasure
+                ?: throw IllegalArgumentException(
+                    "Cannot use star-projected structured properties"))
+
+        propertyTypeConstructor.valueParameters.map { innerParameter ->
+            val propertyName = datastoreName(innerParameter)
+            val mungedName = "$name.$propertyName"
+            val value = propertyValue.value::class.memberProperties.first {
+                it.name == innerParameter.name
+            }.call(propertyValue.value)
+            // TODO(colin): should we somehow warn if you have a
+            // StructuredProperty that is not indexed?
+            set(mungedName, propertyValueToDatastoreValue(
+                mungedName, value, indexed))
+        }
+    } else if (
+        propertyValue is List<*> && propertyValue.isNotEmpty() &&
+        propertyValue[0] is StructuredProperty<*>
+    ) {
+        // Repeated structured properties have to be handled separately, as
+        // they're flattened out into a number of top-level repeated fields.
+        val propertyTypeConstructor = assertedPrimaryConstructor(
+            property.returnType.arguments[0].type // Unwrap List<T>
+            ?.arguments?.get(0)?.type?.jvmErasure // Unwrap StructuredProperty
+                ?: throw IllegalArgumentException(
+                    "Cannot use star-projected structured properties"))
+
+        propertyTypeConstructor.valueParameters.map { innerParameter ->
+            val propertyName = datastoreName(innerParameter)
+            val mungedName = "$name.$propertyName"
+            val values = propertyValue.map { structuredProp ->
+                (structuredProp as StructuredProperty<*>)
+                    .value::class.memberProperties.first {
+                    it.name == innerParameter.name
+                }.call(structuredProp.value)
+            }
+            // TODO(colin): should we somehow warn if you have a
+            // StructuredProperty that is not indexed?
+            set(mungedName, propertyValueToDatastoreValue(
+                mungedName, values, indexed))
+        }
+    } else {
+        set(name, propertyValueToDatastoreValue(name, propertyValue, indexed))
+    }
 }
