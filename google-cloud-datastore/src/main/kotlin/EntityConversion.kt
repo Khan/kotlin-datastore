@@ -160,27 +160,6 @@ internal fun buildEntityPropertiesFromObject(
 }
 
 /**
- * Find the name for the given parameter in the datastore.
- *
- * Prefer a `@Meta(name = ...)` annotation if present; otherwise, fallback on
- * the name in code.
- */
-internal fun datastoreName(kParameter: KParameter): String? =
-    metaAnnotationName(kParameter) ?: kParameter.name
-
-/**
- * Read the name out of a @Meta annotation, if present.
- */
-internal fun metaAnnotationName(element: KAnnotatedElement): String? {
-    val annotName = element.findAnnotation<Meta>()?.name
-    return if (annotName != null && annotName != "") {
-        annotName
-    } else {
-        null
-    }
-}
-
-/**
  * Read the indexing out of a @Meta annotation, if present.
  */
 internal fun metaAnnotationIndexed(element: KAnnotatedElement): Boolean? =
@@ -486,10 +465,8 @@ internal fun <P> BaseEntity.Builder<*, *>.setTypedProperty(
         .valueParameters.firstOrNull {
             it.name == property.name
         }
-    val name =
-        metaAnnotationName(property) // Only present on computed properties.
-            ?: parameter?.let(::datastoreName)
-            ?: property.name
+
+    val name = kotlinNameToDatastoreName(modelInstance::class, property.name)
 
     val indexed =
         metaAnnotationIndexed(property) // Only present on computed properties.

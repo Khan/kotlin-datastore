@@ -13,13 +13,19 @@ data class KeyTestModel(
     override val key: Key<KeyTestModel>
 ) : Keyed<KeyTestModel>
 
+// Value used for toDatastoreFilter(cls) when we're testing internals with
+// queries that don't correspond to a model class. In this case, we don't care
+// abour property renaming, so it doesn't really matter what we pass as the
+// class.
+val dummyClass = KeyTestModel::class
+
 class QueryTest : StringSpec({
     "It should convert byte array conditions correctly" {
         val filter = DatastoreTypeConverter.filterToPb(FieldQueryFilter(
             "aField",
             FieldCondition.EQUAL,
             "abcd".toByteArray()
-        ).toDatastoreFilter())
+        ).toDatastoreFilter(dummyClass))
         filter.propertyFilter.property.name shouldBe "aField"
         filter.propertyFilter.op shouldBe PropertyFilter.Operator.EQUAL
         String(filter.propertyFilter.value.blobValue.toByteArray()) shouldBe
@@ -31,7 +37,7 @@ class QueryTest : StringSpec({
             "aField",
             FieldCondition.LESS_THAN,
             true
-        ).toDatastoreFilter())
+        ).toDatastoreFilter(dummyClass))
         filter.propertyFilter.property.name shouldBe "aField"
         filter.propertyFilter.op shouldBe PropertyFilter.Operator.LESS_THAN
         filter.propertyFilter.value.booleanValue shouldBe true
@@ -42,7 +48,7 @@ class QueryTest : StringSpec({
             "aField",
             FieldCondition.GREATER_THAN,
             3.0
-        ).toDatastoreFilter())
+        ).toDatastoreFilter(dummyClass))
         filter.propertyFilter.property.name shouldBe "aField"
         filter.propertyFilter.op shouldBe PropertyFilter.Operator.GREATER_THAN
         filter.propertyFilter.value.doubleValue shouldBe 3.0
@@ -53,7 +59,7 @@ class QueryTest : StringSpec({
             "aField",
             FieldCondition.LESS_THAN_OR_EQUAL,
             5L
-        ).toDatastoreFilter())
+        ).toDatastoreFilter(dummyClass))
         filter.propertyFilter.property.name shouldBe "aField"
         filter.propertyFilter.op shouldBe
             PropertyFilter.Operator.LESS_THAN_OR_EQUAL
@@ -65,7 +71,7 @@ class QueryTest : StringSpec({
             "aField",
             FieldCondition.GREATER_THAN_OR_EQUAL,
             "abcde"
-        ).toDatastoreFilter())
+        ).toDatastoreFilter(dummyClass))
         filter.propertyFilter.property.name shouldBe "aField"
         filter.propertyFilter.op shouldBe
             PropertyFilter.Operator.GREATER_THAN_OR_EQUAL
@@ -77,7 +83,7 @@ class QueryTest : StringSpec({
             "aField",
             FieldCondition.GREATER_THAN_OR_EQUAL,
             LocalDateTime.ofEpochSecond(10, 0, ZoneOffset.UTC)
-        ).toDatastoreFilter())
+        ).toDatastoreFilter(dummyClass))
         filter.propertyFilter.property.name shouldBe "aField"
         filter.propertyFilter.op shouldBe
             PropertyFilter.Operator.GREATER_THAN_OR_EQUAL
@@ -89,7 +95,7 @@ class QueryTest : StringSpec({
             "aField",
             FieldCondition.LESS_THAN,
             Key<KeyTestModel>("KeyTestModel", "the-first-one")
-        ).toDatastoreFilter())
+        ).toDatastoreFilter(dummyClass))
         filter.propertyFilter.property.name shouldBe "aField"
         filter.propertyFilter.op shouldBe
             PropertyFilter.Operator.LESS_THAN
@@ -103,7 +109,7 @@ class QueryTest : StringSpec({
     "It should convert ancestor conditions correctly" {
         val filter = DatastoreTypeConverter.filterToPb(AncestorQueryFilter(
             Key<KeyTestModel>("KeyTestModel", "the-first-one")
-        ).toDatastoreFilter())
+        ).toDatastoreFilter(dummyClass))
         filter.propertyFilter.property.name shouldBe "__key__"
         filter.propertyFilter.op shouldBe
             PropertyFilter.Operator.HAS_ANCESTOR

@@ -15,9 +15,12 @@ import com.google.cloud.datastore.Blob
 import com.google.cloud.datastore.NullValue
 import com.google.cloud.datastore.StructuredQuery.PropertyFilter
 import org.khanacademy.metadata.Key
+import kotlin.reflect.KClass
 
 sealed class QueryFilter {
-    internal abstract fun toDatastoreFilter(): PropertyFilter
+    // cls is the class representing the kind on which we're querying. This is
+    // used for mapping between kotlin and datastore names.
+    internal abstract fun toDatastoreFilter(cls: KClass<*>): PropertyFilter
 }
 
 enum class FieldCondition {
@@ -36,119 +39,126 @@ data class FieldQueryFilter(
     val condition: FieldCondition,
     val value: Any?
 ) : QueryFilter() {
-    internal override fun toDatastoreFilter(): PropertyFilter =
+    override fun toDatastoreFilter(cls: KClass<*>): PropertyFilter {
+        // TODO(colin): we should also eventually forbid using the datastore
+        // name directly and only use kotlin names in kotlin code. However,
+        // using the datastore name is currently the only way we have to query
+        // ndb-style structured properties, so this isn't simple to do at
+        // present.
+        val datastoreFieldName = kotlinNameToDatastoreName(cls, fieldName)
         // This function is pretty gross because the datastore client library
         // uses no generics or abstraction around filter types for this at all.
         // We therefore have to list out all the options manually in order to
         // be able to call the correct overload of the function. There are a
         // lot of them.
-        when (val datastoreValue = toDatastoreType(value)) {
+        return when (val datastoreValue = toDatastoreType(value)) {
             is Blob -> when (condition) {
                 FieldCondition.EQUAL ->
-                    PropertyFilter.eq(fieldName, datastoreValue)
+                    PropertyFilter.eq(datastoreFieldName, datastoreValue)
                 FieldCondition.LESS_THAN ->
-                    PropertyFilter.lt(fieldName, datastoreValue)
+                    PropertyFilter.lt(datastoreFieldName, datastoreValue)
                 FieldCondition.LESS_THAN_OR_EQUAL ->
-                    PropertyFilter.le(fieldName, datastoreValue)
+                    PropertyFilter.le(datastoreFieldName, datastoreValue)
                 FieldCondition.GREATER_THAN ->
-                    PropertyFilter.gt(fieldName, datastoreValue)
+                    PropertyFilter.gt(datastoreFieldName, datastoreValue)
                 FieldCondition.GREATER_THAN_OR_EQUAL ->
-                    PropertyFilter.ge(fieldName, datastoreValue)
+                    PropertyFilter.ge(datastoreFieldName, datastoreValue)
             }
             is Boolean -> when (condition) {
                 FieldCondition.EQUAL ->
-                    PropertyFilter.eq(fieldName, datastoreValue)
+                    PropertyFilter.eq(datastoreFieldName, datastoreValue)
                 FieldCondition.LESS_THAN ->
-                    PropertyFilter.lt(fieldName, datastoreValue)
+                    PropertyFilter.lt(datastoreFieldName, datastoreValue)
                 FieldCondition.LESS_THAN_OR_EQUAL ->
-                    PropertyFilter.le(fieldName, datastoreValue)
+                    PropertyFilter.le(datastoreFieldName, datastoreValue)
                 FieldCondition.GREATER_THAN ->
-                    PropertyFilter.gt(fieldName, datastoreValue)
+                    PropertyFilter.gt(datastoreFieldName, datastoreValue)
                 FieldCondition.GREATER_THAN_OR_EQUAL ->
-                    PropertyFilter.ge(fieldName, datastoreValue)
+                    PropertyFilter.ge(datastoreFieldName, datastoreValue)
             }
             is Double -> when (condition) {
                 FieldCondition.EQUAL ->
-                    PropertyFilter.eq(fieldName, datastoreValue)
+                    PropertyFilter.eq(datastoreFieldName, datastoreValue)
                 FieldCondition.LESS_THAN ->
-                    PropertyFilter.lt(fieldName, datastoreValue)
+                    PropertyFilter.lt(datastoreFieldName, datastoreValue)
                 FieldCondition.LESS_THAN_OR_EQUAL ->
-                    PropertyFilter.le(fieldName, datastoreValue)
+                    PropertyFilter.le(datastoreFieldName, datastoreValue)
                 FieldCondition.GREATER_THAN ->
-                    PropertyFilter.gt(fieldName, datastoreValue)
+                    PropertyFilter.gt(datastoreFieldName, datastoreValue)
                 FieldCondition.GREATER_THAN_OR_EQUAL ->
-                    PropertyFilter.ge(fieldName, datastoreValue)
+                    PropertyFilter.ge(datastoreFieldName, datastoreValue)
             }
             is Long -> when (condition) {
                 FieldCondition.EQUAL ->
-                    PropertyFilter.eq(fieldName, datastoreValue)
+                    PropertyFilter.eq(datastoreFieldName, datastoreValue)
                 FieldCondition.LESS_THAN ->
-                    PropertyFilter.lt(fieldName, datastoreValue)
+                    PropertyFilter.lt(datastoreFieldName, datastoreValue)
                 FieldCondition.LESS_THAN_OR_EQUAL ->
-                    PropertyFilter.le(fieldName, datastoreValue)
+                    PropertyFilter.le(datastoreFieldName, datastoreValue)
                 FieldCondition.GREATER_THAN ->
-                    PropertyFilter.gt(fieldName, datastoreValue)
+                    PropertyFilter.gt(datastoreFieldName, datastoreValue)
                 FieldCondition.GREATER_THAN_OR_EQUAL ->
-                    PropertyFilter.ge(fieldName, datastoreValue)
+                    PropertyFilter.ge(datastoreFieldName, datastoreValue)
             }
             is String -> when (condition) {
                 FieldCondition.EQUAL ->
-                    PropertyFilter.eq(fieldName, datastoreValue)
+                    PropertyFilter.eq(datastoreFieldName, datastoreValue)
                 FieldCondition.LESS_THAN ->
-                    PropertyFilter.lt(fieldName, datastoreValue)
+                    PropertyFilter.lt(datastoreFieldName, datastoreValue)
                 FieldCondition.LESS_THAN_OR_EQUAL ->
-                    PropertyFilter.le(fieldName, datastoreValue)
+                    PropertyFilter.le(datastoreFieldName, datastoreValue)
                 FieldCondition.GREATER_THAN ->
-                    PropertyFilter.gt(fieldName, datastoreValue)
+                    PropertyFilter.gt(datastoreFieldName, datastoreValue)
                 FieldCondition.GREATER_THAN_OR_EQUAL ->
-                    PropertyFilter.ge(fieldName, datastoreValue)
+                    PropertyFilter.ge(datastoreFieldName, datastoreValue)
             }
             is Timestamp -> when (condition) {
                 FieldCondition.EQUAL ->
-                    PropertyFilter.eq(fieldName, datastoreValue)
+                    PropertyFilter.eq(datastoreFieldName, datastoreValue)
                 FieldCondition.LESS_THAN ->
-                    PropertyFilter.lt(fieldName, datastoreValue)
+                    PropertyFilter.lt(datastoreFieldName, datastoreValue)
                 FieldCondition.LESS_THAN_OR_EQUAL ->
-                    PropertyFilter.le(fieldName, datastoreValue)
+                    PropertyFilter.le(datastoreFieldName, datastoreValue)
                 FieldCondition.GREATER_THAN ->
-                    PropertyFilter.gt(fieldName, datastoreValue)
+                    PropertyFilter.gt(datastoreFieldName, datastoreValue)
                 FieldCondition.GREATER_THAN_OR_EQUAL ->
-                    PropertyFilter.ge(fieldName, datastoreValue)
+                    PropertyFilter.ge(datastoreFieldName, datastoreValue)
             }
             is DatastoreKey -> when (condition) {
                 FieldCondition.EQUAL ->
-                    PropertyFilter.eq(fieldName, datastoreValue)
+                    PropertyFilter.eq(datastoreFieldName, datastoreValue)
                 FieldCondition.LESS_THAN ->
-                    PropertyFilter.lt(fieldName, datastoreValue)
+                    PropertyFilter.lt(datastoreFieldName, datastoreValue)
                 FieldCondition.LESS_THAN_OR_EQUAL ->
-                    PropertyFilter.le(fieldName, datastoreValue)
+                    PropertyFilter.le(datastoreFieldName, datastoreValue)
                 FieldCondition.GREATER_THAN ->
-                    PropertyFilter.gt(fieldName, datastoreValue)
+                    PropertyFilter.gt(datastoreFieldName, datastoreValue)
                 FieldCondition.GREATER_THAN_OR_EQUAL ->
-                    PropertyFilter.ge(fieldName, datastoreValue)
+                    PropertyFilter.ge(datastoreFieldName, datastoreValue)
             }
             null -> when (condition) {
                 FieldCondition.EQUAL ->
-                    PropertyFilter.eq(fieldName, NullValue())
+                    PropertyFilter.eq(datastoreFieldName, NullValue())
                 FieldCondition.LESS_THAN ->
-                    PropertyFilter.lt(fieldName, NullValue())
+                    PropertyFilter.lt(datastoreFieldName, NullValue())
                 FieldCondition.LESS_THAN_OR_EQUAL ->
-                    PropertyFilter.le(fieldName, NullValue())
+                    PropertyFilter.le(datastoreFieldName, NullValue())
                 FieldCondition.GREATER_THAN ->
-                    PropertyFilter.gt(fieldName, NullValue())
+                    PropertyFilter.gt(datastoreFieldName, NullValue())
                 FieldCondition.GREATER_THAN_OR_EQUAL ->
-                    PropertyFilter.ge(fieldName, NullValue())
+                    PropertyFilter.ge(datastoreFieldName, NullValue())
             }
             // TODO(colin): implement querying on other supported property
             // types. See EntityConversion.kt for a more comprehensive list.
             else -> throw IllegalArgumentException(
                 "Unable to query on property $fieldName " +
-                "(value $datastoreValue)")
+                    "(value $datastoreValue)")
         }
+    }
 }
 
 data class AncestorQueryFilter(val value: Key<*>) : QueryFilter() {
-    internal override fun toDatastoreFilter(): PropertyFilter =
+    override fun toDatastoreFilter(cls: KClass<*>): PropertyFilter =
         PropertyFilter.hasAncestor(value.toDatastoreKey())
 }
 
