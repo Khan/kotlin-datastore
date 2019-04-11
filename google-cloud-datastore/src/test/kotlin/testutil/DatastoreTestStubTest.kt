@@ -8,6 +8,7 @@ import io.kotlintest.specs.StringSpec
 import org.khanacademy.datastore.DB
 import org.khanacademy.datastore.Datastore
 import org.khanacademy.datastore.get
+import org.khanacademy.datastore.getMulti
 import org.khanacademy.datastore.keysOnlyQuery
 import org.khanacademy.datastore.put
 import org.khanacademy.datastore.query
@@ -121,6 +122,34 @@ class DatastoreTestStubTest : StringSpec({
             key = Key("TestKind", 1)
         )
     )
+
+    "It should return the expected models in the order they were requested" {
+        withMockDatastore(queryFixtures) {
+            // when there is a key that does not have an entity matching, put
+            // null in its place in the return value.
+            val pair = DB.getMulti(Key<TestKind>("TestKind", 9),
+                Key<TestQueryKind>("TestQueryKind", 4))
+            pair.first?.key shouldBe null
+            pair.second?.key shouldBe Key<TestQueryKind>("TestQueryKind", 4)
+
+            // test the return values across the supported capacities (2, 3, 4)
+            val trip = DB.getMulti(Key<TestKind>("TestKind", 1),
+                Key<TestQueryKind>("TestQueryKind", 2),
+                Key<TestQueryKind>("TestQueryKind", 3))
+            trip.first?.key shouldBe Key<TestKind>("TestKind", 1)
+            trip.second?.key shouldBe Key<TestQueryKind>("TestQueryKind", 2)
+            trip.third?.key shouldBe Key<TestQueryKind>("TestQueryKind", 3)
+
+            val quad = DB.getMulti(Key<TestKind>("TestKind", 1),
+                Key<TestQueryKind>("TestQueryKind", 2),
+                Key<TestQueryKind>("TestQueryKind", 3),
+                Key<TestQueryKind>("TestQueryKind", 1))
+            quad.first?.key shouldBe Key<TestKind>("TestKind", 1)
+            quad.second?.key shouldBe Key<TestQueryKind>("TestQueryKind", 2)
+            quad.third?.key shouldBe Key<TestQueryKind>("TestQueryKind", 3)
+            quad.fourth?.key shouldBe Key<TestQueryKind>("TestQueryKind", 1)
+        }
+    }
 
     "It should correctly evaluate simple equality queries" {
         withMockDatastore(queryFixtures) {

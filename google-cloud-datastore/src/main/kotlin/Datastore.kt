@@ -6,6 +6,7 @@
 package org.khanacademy.datastore
 
 import com.google.cloud.datastore.DatastoreReaderWriter
+import com.google.cloud.datastore.Entity
 import com.google.cloud.datastore.Query
 import com.google.cloud.datastore.StructuredQuery
 import com.google.cloud.datastore.Transaction
@@ -31,6 +32,9 @@ data class TransactionOptions(
     }
 }
 
+data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C,
+                                 val fourth: D)
+
 // Public API extension functions
 
 /**
@@ -45,6 +49,23 @@ inline fun <reified T : Keyed<T>> Datastore.get(key: Key<T>): T? =
     internalGet(this, key, T::class)
 
 /**
+ * Synchronous get multi by object keys from datastore.
+ */
+inline fun <reified A : Keyed<A>, reified B : Keyed<B>> Datastore.getMulti(
+    a: Key<A>, b: Key<B>): Pair<A?, B?> =
+        internalGetMulti(this, a, b, A::class, B::class)
+
+inline fun <reified A : Keyed<A>, reified B : Keyed<B>, reified C : Keyed<C>>
+    Datastore.getMulti(a: Key<A>, b: Key<B>, c: Key<C>): Triple<A?, B?, C?> =
+        internalGetMulti(this, a, b, c, A::class, B::class, C::class)
+
+inline fun <reified A : Keyed<A>, reified B : Keyed<B>, reified C : Keyed<C>,
+    reified D : Keyed<D>>
+    Datastore.getMulti(a: Key<A>, b: Key<B>, c: Key<C>, d: Key<D>):
+    Quadruple<A?, B?, C?, D?> =
+        internalGetMulti(this, a, b, c, d, A::class, B::class, C::class,
+            D::class)
+/**
  * Asynchronous get by key of an object from the datastore.
  *
  * This uses the standard kotlin `async` function, with a coroutine context
@@ -56,6 +77,33 @@ inline fun <reified T : Keyed<T>> Datastore.getAsync(
     key: Key<T>
 ): Deferred<T?> = internalGetAsync(this, key, T::class)
 
+/**
+ * Asynchronous get multi by object keys from datastore.
+ */
+inline fun <reified A : Keyed<A>, reified B : Keyed<B>> Datastore.getMultiAsync(
+    a: Key<A>, b: Key<B>
+): Deferred<Pair<A?, B?>?> =
+        internalGetMultiAsync(this, a, b, A::class, B::class)
+
+inline fun <
+    reified A : Keyed<A>,
+    reified B : Keyed<B>,
+    reified C : Keyed<C>
+> Datastore.getMultiAsync(
+    a: Key<A>, b: Key<B>, c: Key<C>
+): Deferred<Triple<A?, B?, C?>?> =
+    internalGetMultiAsync(this, a, b, c, A::class, B::class, C::class)
+
+inline fun <
+    reified A : Keyed<A>,
+    reified B : Keyed<B>,
+    reified C : Keyed<C>,
+    reified D : Keyed<D>
+> Datastore.getMultiAsync(
+    a: Key<A>, b: Key<B>, c: Key<C>, d: Key<D>
+): Deferred<Quadruple<A?, B?, C?, D?>?> =
+    internalGetMultiAsync(this, a, b, c, d, A::class, B::class, C::class,
+        D::class)
 /**
  * Synchronous put of an object to the datastore.
  */
@@ -248,6 +296,66 @@ fun <T : Keyed<T>> internalGet(
     ?.toTypedModel(tReference)
 
 /**
+ * Internal Datastore.getMulti used as an inlining target.
+ */
+fun <A : Keyed<A>, B : Keyed<B>> internalGetMulti(
+    datastore: Datastore, a: Key<A>, b: Key<B>, aClass: KClass<A>,
+    bClass: KClass<B>
+): Pair<A?, B?> {
+    val entities = datastore.clientOrTransaction.get(
+        a.toDatastoreKey(), b.toDatastoreKey())
+    val formattedEntities = replaceMissingWithNull(listOf(a, b), entities)
+
+    return Pair(
+        formattedEntities[0]?.toTypedModel(aClass),
+        formattedEntities[1]?.toTypedModel(bClass))
+}
+
+fun <A : Keyed<A>, B : Keyed<B>, C : Keyed<C>> internalGetMulti(
+    datastore: Datastore, a: Key<A>, b: Key<B>, c: Key<C>, aClass: KClass<A>,
+    bClass: KClass<B>, cClass: KClass<C>
+): Triple<A?, B?, C?> {
+    val entities = datastore.clientOrTransaction.get(
+        a.toDatastoreKey(), b.toDatastoreKey(), c.toDatastoreKey())
+    val formattedEntities = replaceMissingWithNull(listOf(a, b, c), entities)
+
+    return Triple(
+        formattedEntities[0]?.toTypedModel(aClass),
+        formattedEntities[1]?.toTypedModel(bClass),
+        formattedEntities[2]?.toTypedModel(cClass))
+}
+
+fun <A : Keyed<A>, B : Keyed<B>, C : Keyed<C>, D : Keyed<D>> internalGetMulti(
+    datastore: Datastore, a: Key<A>, b: Key<B>, c: Key<C>, d: Key<D>,
+    aClass: KClass<A>, bClass: KClass<B>, cClass: KClass<C>, dClass: KClass<D>
+): Quadruple<A?, B?, C?, D?> {
+    val entities = datastore.clientOrTransaction.get(
+        a.toDatastoreKey(), b.toDatastoreKey(), c.toDatastoreKey(),
+        d.toDatastoreKey())
+    val formattedEntities = replaceMissingWithNull(listOf(a, b, c, d), entities)
+
+    return Quadruple(
+        formattedEntities[0]?.toTypedModel(aClass),
+        formattedEntities[1]?.toTypedModel(bClass),
+        formattedEntities[2]?.toTypedModel(cClass),
+        formattedEntities[3]?.toTypedModel(dClass))
+}
+
+private fun replaceMissingWithNull(
+    keys: List<Key<*>>, entities: Iterator<Entity>?
+): List<Entity?> {
+    val keyEntityMap = HashMap<DatastoreKey, Entity>()
+
+    if (entities == null) { return keys.map { null } }
+
+    for (entity in entities) {
+        keyEntityMap.put(entity.key, entity)
+    }
+
+    return keys.map { keyEntityMap[it.toDatastoreKey()] }
+}
+
+/**
  * Internal Datastore.getAsync used as an inlining target.
  *
  * @suppress
@@ -258,6 +366,29 @@ fun <T : Keyed<T>> internalGetAsync(
     internalGet(datastore, key, tReference)
 }
 
+/**
+ * Internal Datastore.getMultiAsync used as an inlining target.
+ */
+fun <A : Keyed<A>, B : Keyed<B>> internalGetMultiAsync(
+        datastore: Datastore, a: Key<A>, b: Key<B>, aClass: KClass<A>, bClass: KClass<B>
+): Deferred<Pair<A?, B?>?> = datastore.async {
+    internalGetMulti(datastore, a, b, aClass, bClass)
+}
+
+fun <A : Keyed<A>, B : Keyed<B>, C : Keyed<C>> internalGetMultiAsync(
+    datastore: Datastore, a: Key<A>, b: Key<B>, c: Key<C>, aClass: KClass<A>,
+    bClass: KClass<B>, cClass: KClass<C>
+): Deferred<Triple<A?, B?, C?>?> = datastore.async {
+    internalGetMulti(datastore, a, b, c, aClass, bClass, cClass)
+}
+
+fun <A : Keyed<A>, B : Keyed<B>, C : Keyed<C>, D : Keyed<D>>
+        internalGetMultiAsync(
+    datastore: Datastore, a: Key<A>, b: Key<B>, c: Key<C>, d: Key<D>,
+    aClass: KClass<A>, bClass: KClass<B>, cClass: KClass<C>, dClass: KClass<D>
+): Deferred<Quadruple<A?, B?, C?, D?>?> = datastore.async {
+    internalGetMulti(datastore, a, b, c, d, aClass, bClass, cClass, dClass)
+}
 /**
  * Run some code, setting localDB back to its current value afterwards.
  *

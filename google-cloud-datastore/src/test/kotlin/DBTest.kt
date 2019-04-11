@@ -39,6 +39,11 @@ class DBTest : StringSpec({
         kind = "TestModel",
         idOrName = KeyName("test_model_3")
     ))
+    val secondaryModel = SecondaryTestModel(Key(
+        parentPath = listOf(),
+        kind = "SecondaryTestModel",
+        idOrName = KeyName("secondary_test_model")
+    ))
 
     "In a non-transactional context, it should call the datastore directly" {
         val testDatastore = makeMockDatastore()
@@ -46,6 +51,52 @@ class DBTest : StringSpec({
         DB.get(testModel1.key)
         verify(testDatastore).get(testModel1.key.toDatastoreKey())
         verify(testDatastore, never()).get(testModel2.key.toDatastoreKey())
+    }
+
+    "It should call the datastore with each of the key arguments" {
+        val testDatastore = makeMockDatastore()
+        Datastore(testDatastore)
+        DB.getMulti(testModel1.key, secondaryModel.key)
+        verify(testDatastore).get(testModel1.key.toDatastoreKey(),
+            secondaryModel.key.toDatastoreKey())
+
+        DB.getMulti(testModel1.key, testModel2.key, secondaryModel.key)
+        verify(testDatastore).get(testModel1.key.toDatastoreKey(),
+            testModel2.key.toDatastoreKey(),
+            secondaryModel.key.toDatastoreKey())
+
+        DB.getMulti(secondaryModel.key, testModel3.key, testModel1.key,
+            testModel2.key)
+        verify(testDatastore).get(secondaryModel.key.toDatastoreKey(),
+            testModel3.key.toDatastoreKey(), testModel1.key.toDatastoreKey(),
+            testModel2.key.toDatastoreKey())
+    }
+
+    "It should call the datastore with each of the key arguments async" {
+        val testDatastore = makeMockDatastore()
+        Datastore(testDatastore)
+        val op1 = DB.getMultiAsync(testModel1.key, secondaryModel.key)
+
+        val op2 = DB.getMultiAsync(testModel1.key, testModel2.key,
+            secondaryModel.key)
+
+        val op3 = DB.getMultiAsync(secondaryModel.key, testModel3.key,
+            testModel1.key, testModel2.key)
+
+        runBlocking {
+            op1.await()
+            op2.await()
+            op3.await()
+        }
+
+        verify(testDatastore).get(testModel1.key.toDatastoreKey(),
+            secondaryModel.key.toDatastoreKey())
+        verify(testDatastore).get(testModel1.key.toDatastoreKey(),
+            testModel2.key.toDatastoreKey(),
+            secondaryModel.key.toDatastoreKey())
+        verify(testDatastore).get(secondaryModel.key.toDatastoreKey(),
+            testModel3.key.toDatastoreKey(), testModel1.key.toDatastoreKey(),
+            testModel2.key.toDatastoreKey())
     }
 
     "It should call the datastore when waiting on async operations" {

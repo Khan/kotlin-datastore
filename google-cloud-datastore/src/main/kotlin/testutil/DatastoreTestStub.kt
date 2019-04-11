@@ -368,6 +368,11 @@ class MockDatastore(private var entities: List<Entity>) : ThrowingDatastore() {
     override fun get(key: Key?): Entity? =
         entities.firstOrNull { it.key == key }
 
+    override fun get(vararg keys: Key?): MutableIterator<Entity> {
+        return keys.mapNotNull { key -> entities.firstOrNull { it.key == key } }
+            .iterator() as MutableIterator<Entity>
+    }
+
     override fun put(entity: FullEntity<*>?): Entity {
         val entityConverted = entity as Entity
         entities += entityConverted
