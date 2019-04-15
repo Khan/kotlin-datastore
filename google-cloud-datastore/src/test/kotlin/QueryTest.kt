@@ -13,13 +13,19 @@ data class KeyTestModel(
     override val key: Key<KeyTestModel>
 ) : Keyed<KeyTestModel>
 
+// Value used for toDatastoreFilter(cls) when we're testing internals with
+// queries that don't correspond to a model class. In this case, we don't care
+// abour property renaming, so it doesn't really matter what we pass as the
+// class.
+val dummyClass = KeyTestModel::class
+
 class QueryTest : StringSpec({
     "It should convert byte array conditions correctly" {
-        val filter = DatastoreTypeConverter.filterToPb(QueryFilter(
+        val filter = DatastoreTypeConverter.filterToPb(FieldQueryFilter(
             "aField",
-            QueryFilterCondition.EQUAL,
+            FieldCondition.EQUAL,
             "abcd".toByteArray()
-        ).toDatastoreFilter())
+        ).toDatastoreFilter(dummyClass))
         filter.propertyFilter.property.name shouldBe "aField"
         filter.propertyFilter.op shouldBe PropertyFilter.Operator.EQUAL
         String(filter.propertyFilter.value.blobValue.toByteArray()) shouldBe
@@ -27,33 +33,33 @@ class QueryTest : StringSpec({
     }
 
     "It should convert boolean conditions correctly" {
-        val filter = DatastoreTypeConverter.filterToPb(QueryFilter(
+        val filter = DatastoreTypeConverter.filterToPb(FieldQueryFilter(
             "aField",
-            QueryFilterCondition.LESS_THAN,
+            FieldCondition.LESS_THAN,
             true
-        ).toDatastoreFilter())
+        ).toDatastoreFilter(dummyClass))
         filter.propertyFilter.property.name shouldBe "aField"
         filter.propertyFilter.op shouldBe PropertyFilter.Operator.LESS_THAN
         filter.propertyFilter.value.booleanValue shouldBe true
     }
 
     "It should convert double conditions correctly" {
-        val filter = DatastoreTypeConverter.filterToPb(QueryFilter(
+        val filter = DatastoreTypeConverter.filterToPb(FieldQueryFilter(
             "aField",
-            QueryFilterCondition.GREATER_THAN,
+            FieldCondition.GREATER_THAN,
             3.0
-        ).toDatastoreFilter())
+        ).toDatastoreFilter(dummyClass))
         filter.propertyFilter.property.name shouldBe "aField"
         filter.propertyFilter.op shouldBe PropertyFilter.Operator.GREATER_THAN
         filter.propertyFilter.value.doubleValue shouldBe 3.0
     }
 
     "It should convert long conditions correctly" {
-        val filter = DatastoreTypeConverter.filterToPb(QueryFilter(
+        val filter = DatastoreTypeConverter.filterToPb(FieldQueryFilter(
             "aField",
-            QueryFilterCondition.LESS_THAN_OR_EQUAL,
+            FieldCondition.LESS_THAN_OR_EQUAL,
             5L
-        ).toDatastoreFilter())
+        ).toDatastoreFilter(dummyClass))
         filter.propertyFilter.property.name shouldBe "aField"
         filter.propertyFilter.op shouldBe
             PropertyFilter.Operator.LESS_THAN_OR_EQUAL
@@ -61,11 +67,11 @@ class QueryTest : StringSpec({
     }
 
     "It should convert string conditions correctly" {
-        val filter = DatastoreTypeConverter.filterToPb(QueryFilter(
+        val filter = DatastoreTypeConverter.filterToPb(FieldQueryFilter(
             "aField",
-            QueryFilterCondition.GREATER_THAN_OR_EQUAL,
+            FieldCondition.GREATER_THAN_OR_EQUAL,
             "abcde"
-        ).toDatastoreFilter())
+        ).toDatastoreFilter(dummyClass))
         filter.propertyFilter.property.name shouldBe "aField"
         filter.propertyFilter.op shouldBe
             PropertyFilter.Operator.GREATER_THAN_OR_EQUAL
@@ -73,11 +79,11 @@ class QueryTest : StringSpec({
     }
 
     "It should convert timestamp conditions correctly" {
-        val filter = DatastoreTypeConverter.filterToPb(QueryFilter(
+        val filter = DatastoreTypeConverter.filterToPb(FieldQueryFilter(
             "aField",
-            QueryFilterCondition.GREATER_THAN_OR_EQUAL,
+            FieldCondition.GREATER_THAN_OR_EQUAL,
             LocalDateTime.ofEpochSecond(10, 0, ZoneOffset.UTC)
-        ).toDatastoreFilter())
+        ).toDatastoreFilter(dummyClass))
         filter.propertyFilter.property.name shouldBe "aField"
         filter.propertyFilter.op shouldBe
             PropertyFilter.Operator.GREATER_THAN_OR_EQUAL
@@ -85,14 +91,28 @@ class QueryTest : StringSpec({
     }
 
     "It should convert key conditions correctly" {
-        val filter = DatastoreTypeConverter.filterToPb(QueryFilter(
+        val filter = DatastoreTypeConverter.filterToPb(FieldQueryFilter(
             "aField",
-            QueryFilterCondition.LESS_THAN,
+            FieldCondition.LESS_THAN,
             Key<KeyTestModel>("KeyTestModel", "the-first-one")
-        ).toDatastoreFilter())
+        ).toDatastoreFilter(dummyClass))
         filter.propertyFilter.property.name shouldBe "aField"
         filter.propertyFilter.op shouldBe
             PropertyFilter.Operator.LESS_THAN
+        val keyPath = filter.propertyFilter.value.keyValue.pathList
+        keyPath.size shouldBe 1
+        keyPath[0].kind shouldBe "KeyTestModel"
+        keyPath[0].name shouldBe "the-first-one"
+        keyPath[0].id shouldBe 0 // 0 is the protobuf default, not a real ID
+    }
+
+    "It should convert ancestor conditions correctly" {
+        val filter = DatastoreTypeConverter.filterToPb(AncestorQueryFilter(
+            Key<KeyTestModel>("KeyTestModel", "the-first-one")
+        ).toDatastoreFilter(dummyClass))
+        filter.propertyFilter.property.name shouldBe "__key__"
+        filter.propertyFilter.op shouldBe
+            PropertyFilter.Operator.HAS_ANCESTOR
         val keyPath = filter.propertyFilter.value.keyValue.pathList
         keyPath.size shouldBe 1
         keyPath[0].kind shouldBe "KeyTestModel"
@@ -108,28 +128,19 @@ class QueryTest : StringSpec({
             "field3" gt 3L
             "field4" le 4L
             "field5" ge 5L
+            hasAncestor(Key<KeyTestModel>("KeyTestModel", "the-first-one"))
         }
 
         val filters = builder.build()
-        filters[0].fieldName shouldBe "field1"
-        filters[0].condition shouldBe QueryFilterCondition.EQUAL
-        filters[0].value shouldBe 1L
-
-        filters[1].fieldName shouldBe "field2"
-        filters[1].condition shouldBe QueryFilterCondition.LESS_THAN
-        filters[1].value shouldBe 2L
-
-        filters[2].fieldName shouldBe "field3"
-        filters[2].condition shouldBe QueryFilterCondition.GREATER_THAN
-        filters[2].value shouldBe 3L
-
-        filters[3].fieldName shouldBe "field4"
-        filters[3].condition shouldBe QueryFilterCondition.LESS_THAN_OR_EQUAL
-        filters[3].value shouldBe 4L
-
-        filters[4].fieldName shouldBe "field5"
-        filters[4].condition shouldBe
-            QueryFilterCondition.GREATER_THAN_OR_EQUAL
-        filters[4].value shouldBe 5L
+        filters shouldBe listOf(
+            FieldQueryFilter("field1", FieldCondition.EQUAL, 1L),
+            FieldQueryFilter("field2", FieldCondition.LESS_THAN, 2L),
+            FieldQueryFilter("field3", FieldCondition.GREATER_THAN, 3L),
+            FieldQueryFilter("field4", FieldCondition.LESS_THAN_OR_EQUAL, 4L),
+            FieldQueryFilter(
+                "field5", FieldCondition.GREATER_THAN_OR_EQUAL, 5L),
+            AncestorQueryFilter(
+                Key<KeyTestModel>("KeyTestModel", "the-first-one"))
+        )
     }
 })

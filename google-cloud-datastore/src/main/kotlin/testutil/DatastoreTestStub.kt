@@ -273,13 +273,43 @@ internal fun KeyPb.compareTo(other: KeyPb): Int {
     }
 }
 
+// Used to order values of different types, as per
+// https://cloud.google.com/datastore/docs/concepts/entities#value_type_ordering
+private fun Value.typeIndex(): Int =
+    when (valueTypeCase) {
+        Value.ValueTypeCase.NULL_VALUE -> 1
+        Value.ValueTypeCase.INTEGER_VALUE,
+        Value.ValueTypeCase.TIMESTAMP_VALUE -> 2
+        Value.ValueTypeCase.BOOLEAN_VALUE -> 3
+        // The docs say "byte strings" sort before "unicode strings".
+        // I'm taking the first to mean "blob" and the second "string".
+        Value.ValueTypeCase.BLOB_VALUE -> 4
+        Value.ValueTypeCase.STRING_VALUE -> 5
+        Value.ValueTypeCase.DOUBLE_VALUE -> 6
+        Value.ValueTypeCase.GEO_POINT_VALUE -> 7
+        Value.ValueTypeCase.KEY_VALUE -> 8
+        Value.ValueTypeCase.ENTITY_VALUE,
+        Value.ValueTypeCase.ARRAY_VALUE ->
+            throw IllegalArgumentException(
+                "Callers should be comparing list/entity values explicitly.")
+        Value.ValueTypeCase.VALUETYPE_NOT_SET, null ->
+            throw IllegalArgumentException(
+                "Cannot query on values of unknown type.")
+    }
+
 /**
  * Implementation of java.lang.Comparable for Values, used in query conditions.
  *
  * We assume that both values are of the same type.
  */
 internal operator fun Value.compareTo(other: Value): Int {
-    return when (valueTypeCase) {
+    // First, handle the case the values are of different types.
+    val indexCmp = typeIndex().compareTo(other.typeIndex())
+    if (indexCmp != 0) {
+        return indexCmp
+    }
+    return when(valueTypeCase) {
+        // Now, handle the (common) case the values are of the same type.
         Value.ValueTypeCase.NULL_VALUE -> 0
         Value.ValueTypeCase.BOOLEAN_VALUE ->
             this.booleanValue.compareTo(other.booleanValue)
@@ -294,8 +324,7 @@ internal operator fun Value.compareTo(other: Value): Int {
         Value.ValueTypeCase.STRING_VALUE ->
             this.stringValue.compareTo(other.stringValue)
         Value.ValueTypeCase.BLOB_VALUE ->
-            throw IllegalArgumentException(
-                "Cannot query on blob values.")
+            throw IllegalArgumentException("Cannot query on blob values.")
         Value.ValueTypeCase.GEO_POINT_VALUE ->
             TODO("Implement geo point properties")
         Value.ValueTypeCase.ENTITY_VALUE ->
@@ -304,8 +333,27 @@ internal operator fun Value.compareTo(other: Value): Int {
             TODO("Implement repeated properties")
         Value.ValueTypeCase.VALUETYPE_NOT_SET, null ->
             throw IllegalArgumentException(
-                "Cannot query on values of unknown type.")
+                "Cannot query on values of unknown type (value ${this}).")
+        else ->
+            throw IllegalArgumentException(
+                "Unhandled value type case ${valueTypeCase}.")
     }
+}
+
+/**
+ * Return a list of the ancestors (prefixes) of this key, including itself.
+ *
+ * For example, Key("A", 1, "B", 2, "C", 3).ancestors(), would return
+ * Key("A", 1, "B", 2, "C", 3), Key("A", 1, "B", 2), Key("A", 1).
+ */
+private fun Key.ancestors(): List<Key> {
+    var key: Key? = this
+    val ancestors = mutableListOf<Key>()
+    while (key != null) {
+        ancestors.add(key)
+        key = key.parent
+    }
+    return ancestors
 }
 
 /**
@@ -313,21 +361,20 @@ internal operator fun Value.compareTo(other: Value): Int {
  *
  * We treat missing values on the entity as `null`.
  */
-internal fun entityMatches(entity: Entity, filter: PropertyFilter): Boolean {
-    val name = filter.property.name
+internal fun entityMatches(
+    entityKey: Key,
+    entityValue: Value,
+    filter: PropertyFilter
+): Boolean {
     val filterValue = filter.value
-    val entityValue = DatastoreTypeConverter.entityToPb(entity)
-        .propertiesMap[name]
-        ?: Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build()
 
-    // TODO(colin): when implementing repeated values, we'll need to take that
-    // into account here.
+    // matchesFilters(), the caller of entityMatches(), should have
+    // already filtered out the array case.
+    assert(entityValue.valueTypeCase != Value.ValueTypeCase.ARRAY_VALUE)
 
-    // TODO(colin): should we throw here? This probably represents a
-    // programming error if we hit this condition?
-    if (filterValue.valueTypeCase != entityValue.valueTypeCase) {
-        return false
-    }
+    // TODO(colin): should we complain if
+    //    filter.value.valueTypeCase != entityValue.valueTypeCase
+    // and neither is null?  This is probably a programming error.
 
     return when (filter.op) {
         PropertyFilter.Operator.EQUAL ->
@@ -345,12 +392,29 @@ internal fun entityMatches(entity: Entity, filter: PropertyFilter): Boolean {
         PropertyFilter.Operator.LESS_THAN_OR_EQUAL ->
             entityValue <= filterValue
         PropertyFilter.Operator.HAS_ANCESTOR ->
-            TODO("Implement ancestor queries.")
+            // TODO(benkraft): The caller does a bit of extra -- and
+            // semantically questionable -- work in this case, namely
+            // extracting out entityValue despite knowing it won't exist (since
+            // the name is the magic __key__) and we won't need it (we want to
+            // look at entity.key).  But none of it errors (we just get the
+            // null value), so we don't worry about it!
+            entityKey.ancestors().contains(
+                DatastoreTypeConverter.keyFromPb(filterValue.keyValue))
         PropertyFilter.Operator.OPERATOR_UNSPECIFIED,
         PropertyFilter.Operator.UNRECOGNIZED,
         null ->
             throw IllegalArgumentException(
                 "Cannot run a query with unspecified operator.")
+    }
+}
+
+private fun PropertyFilter.isInequalityFilter(): Boolean {
+    return when (op) {
+        PropertyFilter.Operator.GREATER_THAN,
+        PropertyFilter.Operator.GREATER_THAN_OR_EQUAL,
+        PropertyFilter.Operator.LESS_THAN,
+        PropertyFilter.Operator.LESS_THAN_OR_EQUAL -> true
+        else -> false
     }
 }
 
@@ -379,6 +443,54 @@ class MockDatastore(private var entities: List<Entity>) : ThrowingDatastore() {
         return entityConverted
     }
 
+    // Checks that we match all filters that have the same name and
+    // is-inequality status.  For instance, filters might be
+    // `(myint > 4, myint < 6)` -- but would never be
+    // `(myint > 4, myint = 5)`.
+    private fun matchesFiltersForField(
+        entity: Entity,
+        filters: List<PropertyFilter>
+    ): Boolean {
+        val filterName = filters[0].property.name
+        val entityValue = DatastoreTypeConverter.entityToPb(entity)
+            .propertiesMap[filterName]
+            ?: Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build()
+
+        // If we have an array-value and inequality filters, we have
+        // to use this rule: the entity passes if there is some value
+        // in the array which passes all the inequalities.  For
+        // instance if we have '(myint > 4, myint < 6)', and our array
+        // values are [3, 10], we do *not* pass because neither array
+        // value passes both inequalities.
+        // Note if filters[0] is an inequality filter, they all are,
+        // because of how we grouped the filters.
+        return when {
+            entityValue.valueTypeCase == Value.ValueTypeCase.ARRAY_VALUE &&
+            filters[0].isInequalityFilter() ->
+                entityValue.arrayValue.valuesList.any { value ->
+                    filters.all {
+                        filter -> entityMatches(entity.key, value, filter)
+                    }
+                }
+
+            entityValue.valueTypeCase == Value.ValueTypeCase.ARRAY_VALUE ->
+                // This is equality for arrays, we do the "normal"
+                // thing where we match filter-by-filter: each equality
+                // filter passes if the filter-string is present in our array.
+                filters.all { filter ->
+                    entityValue.arrayValue.valuesList.any { value ->
+                        entityMatches(entity.key, value, filter)
+                    }
+                }
+
+            else ->
+                // Non-array case, very straightforward.
+                filters.all {
+                    filter -> entityMatches(entity.key, entityValue, filter)
+                }
+        }
+    }
+
     private fun runEntities(query: Query<*>?): List<Entity> {
         val structuredQuery = query as? StructuredQuery<*>
             ?: throw NotImplementedError(
@@ -393,11 +505,27 @@ class MockDatastore(private var entities: List<Entity>) : ThrowingDatastore() {
             listOf(filter.propertyFilter)
         }
 
-        return entities.filter { entity ->
-            allFilters.all { filter ->
-                entityMatches(entity, filter)
-            }
+        // Most of the time, an entity passes a list of filters if it
+        // passes each filter individually.  However, there is a
+        // special case, as documented at
+        // https://cloud.google.com/datastore/docs/concepts/queries#array_values
+        // This case is inequality filters on array values.  For those
+        // filters, we need to consider the filters *as a group*, not
+        // just one at a time.  To help with that, we group filters
+        // by <name, is_inequality_filter>.
+        val filtersByNameAndType = allFilters.groupBy {
+            Pair(it.property.name, it.isInequalityFilter())
         }
+
+        return entities
+            .filter { entity -> entity.key.kind == query.kind }
+            .filter { entity ->
+                // We consider each filter-group in sequence, the
+                // entity has to pass them all.
+                filtersByNameAndType.all { entry ->
+                    matchesFiltersForField(entity, entry.value)
+                }
+            }
     }
 
     private fun runKeys(query: Query<*>?): List<DatastoreKey> =

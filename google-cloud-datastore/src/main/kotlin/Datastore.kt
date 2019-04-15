@@ -159,16 +159,17 @@ inline fun <reified T : Keyed<T>> Datastore.query(
  *
  * For technical reasons, this is implemented out of line, below.
  */
-fun <T : Keyed<T>> Datastore.keysOnlyQuery(
+inline fun <reified T : Keyed<T>> Datastore.keysOnlyQuery(
     kind: String, vararg filters: QueryFilter
-): Sequence<Key<T>> = internalKeysOnlyQuery<T>(this, kind, filters.toList())
+): Sequence<Key<T>> = internalKeysOnlyQuery<T>(
+    this, kind, filters.toList(), T::class)
 
 /**
  * Query DSL for all keys corresponding to the given filters.
  *
  * @see query for usage information
  */
-fun <T : Keyed<T>> Datastore.keysOnlyQuery(
+inline fun <reified T : Keyed<T>> Datastore.keysOnlyQuery(
     kind: String, builderBlock: QueryFilterBuilder.() -> Any?
 ): Sequence<Key<T>> {
     val builder = QueryFilterBuilder()
@@ -409,9 +410,10 @@ internal fun <T> restoreLocalDBAfter(block: () -> T): T {
  * Throw if the list of filters is empty.
  */
 internal fun convertDatastoreFilters(
-    filters: List<QueryFilter>
+    filters: List<QueryFilter>,
+    cls: KClass<*>
 ): StructuredQuery.Filter {
-    val datastoreFilters = filters.map { it.toDatastoreFilter() }
+    val datastoreFilters = filters.map { it.toDatastoreFilter(cls) }
     return when (datastoreFilters.size) {
         0 -> throw IllegalArgumentException(
             "You must provide at least one query filter.")
@@ -435,9 +437,10 @@ internal fun convertDatastoreFilters(
 fun <T : Keyed<T>> internalQuery(
     datastore: Datastore,
     kind: String,
-    filters: List<QueryFilter>, tReference: KClass<T>
+    filters: List<QueryFilter>,
+    tReference: KClass<T>
 ): Sequence<T> {
-    val filter = convertDatastoreFilters(filters)
+    val filter = convertDatastoreFilters(filters, tReference)
     val query = Query.newEntityQueryBuilder()
         .setKind(kind)
         .setFilter(filter)
@@ -455,9 +458,10 @@ fun <T : Keyed<T>> internalQuery(
 fun <T : Keyed<T>> internalKeysOnlyQuery(
     datastore: Datastore,
     kind: String,
-    filters: List<QueryFilter>
+    filters: List<QueryFilter>,
+    tReference: KClass<T>
 ): Sequence<Key<T>> {
-    val filter = convertDatastoreFilters(filters)
+    val filter = convertDatastoreFilters(filters, tReference)
     val query = Query.newKeyQueryBuilder()
         .setKind(kind)
         .setFilter(filter)

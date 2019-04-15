@@ -36,3 +36,30 @@ data class Key<T : Keyed<T>>(
 interface Keyed<T : Keyed<T>> {
     val key: Key<T>
 }
+
+/**
+ * Classes implementing this interface can be used as datastore properties.
+ *
+ * Note that this is not needed for built-in properties like String or LatLng.
+ * It's needed only for user-defined properties and nested entities (local
+ * structured properties and ndb-style structured properties), which are
+ * expressed as kotlin data classes.
+ *
+ * This is here so that we can have more checks on types as well as more
+ * explicitly specify the intent for any given class.
+ *
+ * The intent is that this is to be used on kotlin data classes only.
+ *
+ * Example usage:
+ * // Point must implement Property because it's used as a nested entity in
+ * // Circle.
+ * data class Point(val x: Int, val y: Int) : Property
+ * data class Circle(val center: Point, val radius: Int)
+ *
+ * TODO(colin): check for a data class somehow?
+ *
+ * TODO(colin): the downside here (beside a bit of verbosity) is that you can't
+ * use a third-party class as a property since you don't control the code. Do
+ * we need a way around this ever?
+ */
+interface Property

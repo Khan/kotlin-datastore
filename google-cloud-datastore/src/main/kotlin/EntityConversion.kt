@@ -4,11 +4,15 @@
 package org.khanacademy.datastore
 
 import com.google.cloud.Timestamp
+import com.google.cloud.datastore.BaseEntity
 import com.google.cloud.datastore.Blob
 import com.google.cloud.datastore.BlobValue
 import com.google.cloud.datastore.BooleanValue
 import com.google.cloud.datastore.DoubleValue
 import com.google.cloud.datastore.Entity
+import com.google.cloud.datastore.EntityValue
+import com.google.cloud.datastore.FullEntity
+import com.google.cloud.datastore.IncompleteKey
 import com.google.cloud.datastore.KeyValue
 import com.google.cloud.datastore.ListValue
 import com.google.cloud.datastore.LongValue
@@ -22,6 +26,8 @@ import org.khanacademy.metadata.KeyName
 import org.khanacademy.metadata.KeyPathElement
 import org.khanacademy.metadata.Keyed
 import org.khanacademy.metadata.Meta
+import org.khanacademy.metadata.Property
+import org.khanacademy.metadata.StructuredProperty
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -35,9 +41,11 @@ import kotlin.reflect.KType
 import kotlin.reflect.full.createType
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.full.findAnnotation
+import kotlin.reflect.full.isSubtypeOf
 import kotlin.reflect.full.primaryConstructor
 import kotlin.reflect.full.valueParameters
 import kotlin.reflect.full.withNullability
+import kotlin.reflect.jvm.jvmErasure
 
 /**
  * Get the primary constructor for a class, asserting it has one.
@@ -68,57 +76,86 @@ val PROPERTY_NOT_PRESENT = object {}
  */
 fun <T : Keyed<T>> Entity.toTypedModel(tRef: KClass<T>): T {
     val constructor = assertedPrimaryConstructor(tRef)
-    val parameters = constructor.valueParameters
+    val keyParameter = constructor.valueParameters
+        .firstOrNull { it.name == "key" }
+        ?: throw IllegalStateException(
+            "Expected entity to have a key when getting.")
+    val keyArg = keyParameter to key.toKey<T>()
+    val allArgs = unkeyedEntityToParameterMap(this, tRef) + keyArg
+    return constructor.callBy(allArgs)
+}
+
+/**
+ * Convert a base entity (without a key) to a kotlin data class instance.
+ *
+ * FullEntity is an Entity that may not have the key set. Despite its name, it
+ * is a superclass of entity, not a subclass.
+ */
+internal fun <T : Any> unkeyedEntityToTypedObject(
+    entity: FullEntity<*>, targetType: KClass<T>
+): T = assertedPrimaryConstructor(targetType)
+    .callBy(unkeyedEntityToParameterMap(entity, targetType))
+
+/**
+ * Convert a base entity to a map for calling a data class constructor.
+ *
+ * The gcloud library stores an entity in a subclass of BaseEntity, which is
+ * basically a glorified map. This turns this glorified map into an actual map
+ * of the format we need.
+ */
+internal fun unkeyedEntityToParameterMap(
+    entity: FullEntity<*>, targetType: KClass<*>
+): Map<KParameter, Any?> {
+    val constructor = assertedPrimaryConstructor(targetType)
+    return constructor.valueParameters
+        // We don't expect nested entities to have a key, and for root
+        // entities, we'll already have gotten the key because it's required by
+        // the Entity.Builder constructor.
+        .filter { it.name != "key" }
         .map { kParameter ->
-            // TODO(colin): instead of hard-coding "key" we should use the name
-            // of the single property in the Keyed<T> interface.
-            kParameter to if (kParameter.name == "key") {
-                key?.toKey<T>()
-                    ?: throw IllegalStateException(
-                        "Expected entity to have a key when getting.")
-            } else {
-                getTypedProperty<T>(
-                    datastoreName(kParameter)
-                        ?: throw IllegalArgumentException(
-                            "Unable to use nameless parameter $kParameter " +
-                                "on class ${tRef.simpleName} as a datastore " +
-                                "property"),
-                    kParameter.type
-                )
-            }
-        }.filter { (_, value) -> value !== PROPERTY_NOT_PRESENT }
+            kParameter to entity.getTypedProperty(
+                datastoreName(kParameter)
+                    ?: throw IllegalArgumentException(
+                        "Unable to use nameless parameter $kParameter " +
+                            "on class ${targetType.simpleName} as a " +
+                            "datastore property"),
+                kParameter.type
+            )
+        }
+        .filter { (_, value) -> value !== PROPERTY_NOT_PRESENT }
         .toMap()
-    return constructor.callBy(parameters)
 }
 
 fun Keyed<*>.toDatastoreEntity(): Entity {
-    val properties = this::class.declaredMemberProperties
-
-    val entity = Entity.newBuilder(this.key.toDatastoreKey())
-
-    properties.filter { it.name != this::key.name }
-        .forEach { entity.setTypedProperty(it, this) }
-    return entity.build()
+    val builder = Entity.newBuilder(this.key.toDatastoreKey())
+    buildEntityPropertiesFromObject(builder, this)
+    return builder.build()
 }
 
 /**
- * Find the name for the given parameter in the datastore.
+ * Convert any data class instance to a FullEntity using reflection.
  *
- * Prefer a `@Meta(name = ...)` annotation if present; otherwise, fallback on
- * the name in code.
+ * A FullEntity is a datastore entity that has all properties present, but may
+ * lack a key. Despite what the name suggests, it is a superclass of Entity,
+ * not a subclass.
+ *
+ * Note that this will not set the key; if you need that functionality, use
+ * Keyed<*>.toDatastoreEntity() instead.
  */
-internal fun datastoreName(kParameter: KParameter): String? =
-    metaAnnotationName(kParameter) ?: kParameter.name
+fun objectToDatastoreEntity(dataclassInstance: Any): FullEntity<*> {
+    val builder = FullEntity.newBuilder()
+    buildEntityPropertiesFromObject(builder, dataclassInstance)
+    return builder.build()
+}
 
-/**
- * Read the name out of a @Meta annotation, if present.
- */
-internal fun metaAnnotationName(element: KAnnotatedElement): String? {
-    val annotName = element.findAnnotation<Meta>()?.name
-    return if (annotName != null && annotName != "") {
-        annotName
-    } else {
-        null
+internal fun buildEntityPropertiesFromObject(
+    entityBuilder: BaseEntity.Builder<*, *>, dataclassInstance: Any
+) {
+    dataclassInstance::class.declaredMemberProperties.filter {
+        // TODO(colin): get this off the Keyed interface?
+        it.name != "key"
+    }.forEach {
+        entityBuilder.setTypedProperty(it, dataclassInstance)
     }
 }
 
@@ -147,14 +184,20 @@ internal fun checkNullability(
 /**
  * Get a single property off an entity, converting to the given type.
  */
-internal fun <T : Keyed<T>> Entity.getTypedProperty(
+internal fun FullEntity<*>.getTypedProperty(
     name: String, type: KType
 ): Any? = checkNullability(
     key?.kind,
     name,
     type,
-    if (name in this) {
-        getExistingTypedProperty<T>(name, type)
+    if (name in this ||
+        // ndb-style StructuredProperties do some weird property renaming, so
+        // their names should never be on the entity. They do their own
+        // handling of absence, and we treat them as if they're always present.
+        type.isStructuredPropertyType() ||
+        type.isStructuredPropertyListType()) {
+
+        getExistingTypedProperty(name, type)
     } else {
         PROPERTY_NOT_PRESENT
     }
@@ -212,11 +255,15 @@ internal fun convertKeyUntyped(datastoreKey: DatastoreKey): Key<*>? {
 /**
  * Convert a value from the type the datastore client uses to our version.
  */
-internal fun fromDatastoreType(datastoreValue: Any?): Any? =
+internal fun fromDatastoreType(datastoreValue: Any?, targetType: KType): Any? =
     when (datastoreValue) {
         is Blob -> datastoreValue.toByteArray()
         is Timestamp -> convertTimestamp(datastoreValue)
         is com.google.cloud.datastore.Key -> convertKeyUntyped(datastoreValue)
+        is FullEntity<*> ->
+            // Note that .jvmErasure is here just a mechanism for converting
+            // our KType to a KClass.
+            unkeyedEntityToTypedObject(datastoreValue, targetType.jvmErasure)
         else -> datastoreValue
     }
 
@@ -230,6 +277,7 @@ internal fun toDatastoreType(kotlinValue: Any?): Any? =
             kotlinValue.toEpochSecond(ZoneOffset.UTC),
             kotlinValue.nano)
         is Key<*> -> kotlinValue.toDatastoreKey()
+        is Property -> objectToDatastoreEntity(kotlinValue)
         else -> kotlinValue
     }
 
@@ -267,39 +315,65 @@ private val TimestampTypes = listOf(
     LocalDateTime::class.createType().withNullability(true)
 )
 
+private val EntityPropertyTypes = listOf(
+    Property::class.createType(),
+    Property::class.createType().withNullability(true)
+)
+
+internal fun KType.isListType(): Boolean =
+    arguments.isNotEmpty() && this == List::class.createType(arguments)
+
+internal fun KType.unwrapSinglyParameterizedType(): KType =
+    arguments[0].type ?: throw IllegalArgumentException(
+        "Star-projected types are not allowed as properties.")
+
 /**
  * Get the value of an entity's property, given that we know it's present.
  */
-internal fun <T : Keyed<T>> Entity.getExistingTypedProperty(
+internal fun FullEntity<*>.getExistingTypedProperty(
     name: String, type: KType
-): Any? = fromDatastoreType(when (type) {
-    in ByteArrayTypes -> getBlob(name)
-    in BooleanTypes -> getBoolean(name)
-    in DoubleTypes -> getDouble(name)
-    in LongTypes -> getLong(name)
-    in StringTypes -> getString(name)
-    in TimestampTypes -> getTimestamp(name)
+): Any? = fromDatastoreType(when {
+    type in ByteArrayTypes -> getBlob(name)
+    // Kotlin doesn't correctly box these basic types as nullable, so
+    // we need to do explicit checks ourselves.
+    type in BooleanTypes -> if (isNull(name)) null else getBoolean(name)
+    type in DoubleTypes -> if (isNull(name)) null else getDouble(name)
+    type in LongTypes -> if (isNull(name)) null else getLong(name)
+    type in StringTypes -> getString(name)
+    type in TimestampTypes -> getTimestamp(name)
+    type.isStructuredPropertyType() -> // Is a StructuredProperty<T>
+        getExistingStructuredProperty(
+            name, type.unwrapSinglyParameterizedType())
+    // This check must come before the generic list check below.
+    type.isStructuredPropertyListType() ->
+        getExistingStructuredProperty(
+            name,
+            type.unwrapSinglyParameterizedType() // Unwrap List<T>
+                .unwrapSinglyParameterizedType(), // Unwrap StructuredProperty
+            repeated = true)
     // The datastore does not distinguish `null` from the empty list, instead
     // treating them both as the empty list.
     // Therefore we don't allow nullable repeated values; use the empty list
     // instead. Note that it's still ok for the type of the list elements to be
     // nullable.
-    List::class.createType(type.arguments) ->
-        getList<Value<*>>(name).map { fromDatastoreType(it.get()) }
-    Key::class.createType(type.arguments),
-    Key::class.createType(type.arguments).withNullability(true) -> getKey(name)
-    // TODO(colin): nested entities
+    type.isListType() -> {
+        val innerType = type.unwrapSinglyParameterizedType()
+        getList<Value<*>>(name).map { fromDatastoreType(it.get(), innerType) }
+    }
+    type.arguments.isNotEmpty() && (
+        type == Key::class.createType(type.arguments) ||
+        type == Key::class.createType(type.arguments).withNullability(true)) ->
+        getKey(name)
     // TODO(colin): location (lat/lng) properties
-    // TODO(colin): repeated properties
     // TODO(colin): JSON properties
     // TODO(colin): computed properties (do we need these?)
     // TODO(colin): in general we want to support all ndb property types, see:
     // https://cloud.google.com/appengine/docs/standard/python/ndb/entity-property-reference#properties_and_value_types
-    else ->
-        throw IllegalArgumentException(
-            "Unable to use property $name of type $type as a datastore " +
-                "property")
-})
+    EntityPropertyTypes.any { type.isSubtypeOf(it) } ->
+        getEntity<IncompleteKey>(name)
+    else -> throw IllegalArgumentException(
+        "Unable to use property $name of type $type as a datastore property")
+}, type)
 
 /**
  * Convert a kotlin-typed value to a datastore Value<V> type.
@@ -351,6 +425,9 @@ internal fun propertyValueToDatastoreValue(
     null -> NullValue.newBuilder()
         .setExcludeFromIndexes(!indexed)
         .build()
+    is FullEntity<*> -> EntityValue.newBuilder(datastoreValue)
+        .setExcludeFromIndexes(!indexed)
+        .build()
     else ->
         throw IllegalArgumentException(
             "Unable to store property $name in the datastore")
@@ -363,9 +440,9 @@ internal fun propertyValueToDatastoreValue(
  * there's something subtle with type variance that's preventing us from doing
  * that. Figure out why.
  */
-internal fun <P> Entity.Builder.setTypedProperty(
+internal fun <P> BaseEntity.Builder<*, *>.setTypedProperty(
     property: KProperty<P>,
-    modelInstance: Keyed<*>
+    modelInstance: Any
 ) {
     val propertyValue: P = property.call(modelInstance)
 
@@ -388,15 +465,26 @@ internal fun <P> Entity.Builder.setTypedProperty(
         .valueParameters.firstOrNull {
             it.name == property.name
         }
-    val name =
-        metaAnnotationName(property) // Only present on computed properties.
-            ?: parameter?.let(::datastoreName)
-            ?: property.name
+
+    val name = kotlinNameToDatastoreName(modelInstance::class, property.name)
 
     val indexed =
         metaAnnotationIndexed(property) // Only present on computed properties.
             ?: parameter?.let(::metaAnnotationIndexed)
             ?: false
 
-    set(name, propertyValueToDatastoreValue(name, propertyValue, indexed))
+    when {
+        propertyValue is StructuredProperty<*> ->
+            setStructuredProperty(property, propertyValue, name, indexed)
+        propertyValue is List<*> && propertyValue.isNotEmpty() &&
+            propertyValue[0] is StructuredProperty<*> ->
+
+            @Suppress("UNCHECKED_CAST")
+            setRepeatedStructuredProperty(
+                property, propertyValue as List<StructuredProperty<*>>,
+                name, indexed)
+        else ->
+            set(name, propertyValueToDatastoreValue(
+                name, propertyValue, indexed))
+    }
 }

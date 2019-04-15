@@ -29,9 +29,16 @@ data class TestKind(
 data class TestQueryKind(
     override val key: Key<TestQueryKind>,
     val aString: String,
+    val aNullableLong: Long?,
     val aTimestamp: LocalDateTime,
-    val aKey: Key<TestKind>
+    val aKey: Key<TestKind>,
+    val manyStrings: List<String?>
 ) : Keyed<TestQueryKind>
+
+data class TestAncestorQueryKind(
+    override val key: Key<TestAncestorQueryKind>,
+    val aString: String
+) : Keyed<TestAncestorQueryKind>
 
 class DatastoreTestStubTest : StringSpec({
     "It should by default throw on any datastore access" {
@@ -94,30 +101,66 @@ class DatastoreTestStubTest : StringSpec({
         TestQueryKind(
             key = Key("TestQueryKind", 1),
             aString = "a",
+            aNullableLong = 42,
             aTimestamp = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC),
-            aKey = Key("TestKind", 1)
+            aKey = Key("TestKind", 1),
+            manyStrings = listOf("4", "2")
         ),
         TestQueryKind(
             key = Key("TestQueryKind", 2),
             aString = "b",
+            aNullableLong = null,
             aTimestamp = LocalDateTime.ofEpochSecond(1, 0, ZoneOffset.UTC),
-            aKey = Key("TestKind", 2)
+            aKey = Key("TestKind", 2),
+            manyStrings = listOf()
         ),
         TestQueryKind(
             key = Key("TestQueryKind", 3),
             aString = "c",
+            aNullableLong = 0,
             aTimestamp = LocalDateTime.ofEpochSecond(1, 1, ZoneOffset.UTC),
             aKey = Key(
                 "TestKind", 1,
-                parentPath = listOf(KeyPathElement("AParentKind", KeyID(1))))
-
+                parentPath = listOf(KeyPathElement("AParentKind", KeyID(1)))),
+            manyStrings = listOf(null, null, null)
         ),
         TestQueryKind(
             key = Key("TestQueryKind", 4),
             aString = "d",
+            aNullableLong = -42,
             aTimestamp = LocalDateTime.ofEpochSecond(2, 0, ZoneOffset.UTC),
-            aKey = Key("TestKind", "some-string-key")
+            aKey = Key("TestKind", "some-string-key"),
+            manyStrings = listOf("2", "4", "", null, "42")
         ),
+
+        TestAncestorQueryKind(
+            key = Key(
+                "TestAncestorQueryKind", 5,
+                parentPath = listOf(KeyPathElement("TestKind", KeyID(1)))
+            ),
+            aString = "a"
+        ),
+        TestAncestorQueryKind(
+            key = Key(
+                "TestAncestorQueryKind", 6,
+                parentPath = listOf(
+                    KeyPathElement("TestKind", KeyID(2)),
+                    KeyPathElement("TestQueryKind", KeyID(2))
+                )
+            ),
+            aString = "a"
+        ),
+        TestAncestorQueryKind(
+            key = Key(
+                "TestAncestorQueryKind", 7,
+                parentPath = listOf(
+                    KeyPathElement("TestKind", KeyID(2)),
+                    KeyPathElement("TestQueryKind", KeyID(2))
+                )
+            ),
+            aString = "b"
+        ),
+
         TestKind(
             key = Key("TestKind", 1)
         )
@@ -179,6 +222,41 @@ class DatastoreTestStubTest : StringSpec({
             }.toList()
             result.size shouldBe 1
             result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 1)
+        }
+    }
+
+    "It should correctly evaluate simple list equality queries" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>("TestQueryKind") {
+                "manyStrings" eq "4"
+            }.toList()
+            result.size shouldBe 2
+            result.map { (it.key.idOrName as KeyID).value } shouldBe
+                listOf(1L, 4L)
+        }
+    }
+
+    "It should correctly evaluate multiple list equality queries" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>("TestQueryKind") {
+                "manyStrings" eq "4"
+                "manyStrings" eq "42"
+            }.toList()
+            result.size shouldBe 1
+            result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 4)
+        }
+    }
+
+    "It should correctly evaluate list inequality queries" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>("TestQueryKind") {
+                "manyStrings" gt "41"
+                "manyStrings" lt "3"
+            }.toList()
+            // This does not match: while we have an entity that has
+            // both a manyString < "3" and a manyString > "41", we
+            // don't have a list-value that satisfies both conditions.
+            result.size shouldBe 0
         }
     }
 
@@ -248,6 +326,89 @@ class DatastoreTestStubTest : StringSpec({
             lateNamespaceKey)
     }
 
+    "It should correctly evaluate ancestor queries" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestAncestorQueryKind>(
+                "TestAncestorQueryKind"
+            ) {
+                hasAncestor(Key<TestKind>("TestKind", 1))
+            }.toList()
+            result.size shouldBe 1
+            result[0].key.kind shouldBe "TestAncestorQueryKind"
+            result[0].key.idOrName shouldBe KeyID(5L)
+        }
+    }
+
+    "It should correctly evaluate ancestor queries for a prefix of the path" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestAncestorQueryKind>(
+                "TestAncestorQueryKind"
+            ) {
+                hasAncestor(Key<TestKind>("TestKind", 2))
+            }.toList()
+            result.size shouldBe 2
+            result[0].key.kind shouldBe "TestAncestorQueryKind"
+            result[0].key.idOrName shouldBe KeyID(6L)
+            result[1].key.kind shouldBe "TestAncestorQueryKind"
+            result[1].key.idOrName shouldBe KeyID(7L)
+        }
+    }
+
+    "It should correctly evaluate ancestor queries for the parent key" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestAncestorQueryKind>(
+                "TestAncestorQueryKind"
+            ) {
+                hasAncestor(Key<TestKind>(
+                    "TestQueryKind", 2,
+                    parentPath = listOf(
+                        KeyPathElement("TestKind", KeyID(2))
+                    )
+                ))
+            }.toList()
+            result.size shouldBe 2
+            result[0].key.kind shouldBe "TestAncestorQueryKind"
+            result[0].key.idOrName shouldBe KeyID(6L)
+            result[1].key.kind shouldBe "TestAncestorQueryKind"
+            result[1].key.idOrName shouldBe KeyID(7L)
+        }
+    }
+
+    // We don't really do it -- why would you -- but it is valid to query based
+    // on the entire key as an "ancestor"!
+    "It should correctly evaluate ancestor queries for the entire key" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestAncestorQueryKind>(
+                "TestAncestorQueryKind"
+            ) {
+                hasAncestor(Key<TestKind>(
+                    "TestAncestorQueryKind", 6,
+                    parentPath = listOf(
+                        KeyPathElement("TestKind", KeyID(2)),
+                        KeyPathElement("TestQueryKind", KeyID(2))
+                    )
+                ))
+            }.toList()
+            result.size shouldBe 1
+            result[0].key.kind shouldBe "TestAncestorQueryKind"
+            result[0].key.idOrName shouldBe KeyID(6L)
+        }
+    }
+
+    "It should correctly evaluate mixed ancestor/property queries" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestAncestorQueryKind>(
+                "TestAncestorQueryKind"
+            ) {
+                hasAncestor(Key<TestKind>("TestKind", 2))
+                "aString" eq "a"
+            }.toList()
+            result.size shouldBe 1
+            result[0].key.kind shouldBe "TestAncestorQueryKind"
+            result[0].key.idOrName shouldBe KeyID(6L)
+        }
+    }
+
     "Keys only queries should also return the same results, just with keys" {
         withMockDatastore(queryFixtures) {
             val result = DB.keysOnlyQuery<TestQueryKind>("TestQueryKind") {
@@ -256,6 +417,27 @@ class DatastoreTestStubTest : StringSpec({
             result.size shouldBe 3
             result.map { (it.idOrName as KeyID).value } shouldBe
                 listOf(1L, 2L, 3L)
+        }
+    }
+
+    "It should correctly compare numbers to null" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>("TestQueryKind") {
+                "aNullableLong" lt 0L
+            }.toList()
+            result.size shouldBe 2
+            result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 2)
+            result[1].key shouldBe Key<TestQueryKind>("TestQueryKind", 4)
+        }
+    }
+
+    "It should correctly find null" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>("TestQueryKind") {
+                "aNullableLong" eq null
+            }.toList()
+            result.size shouldBe 1
+            result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 2)
         }
     }
 })

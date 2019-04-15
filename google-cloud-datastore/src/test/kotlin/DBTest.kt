@@ -12,12 +12,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import org.khanacademy.datastore.testutil.withMockDatastore
 import org.khanacademy.metadata.Key
 import org.khanacademy.metadata.KeyName
 import org.khanacademy.metadata.Keyed
+import org.khanacademy.metadata.Meta
 import java.util.concurrent.CompletableFuture
 
 data class TestModel(override val key: Key<TestModel>) : Keyed<TestModel>
+
+data class RenamingTestModel(
+    @Meta(name = "y")
+    val x: String,
+    override val key: Key<RenamingTestModel>
+) : Keyed<RenamingTestModel>
 
 fun makeMockDatastore(): com.google.cloud.datastore.Datastore = mock {
     on { newTransaction() } doAnswer { mock() }
@@ -233,5 +241,19 @@ class DBTest : StringSpec({
             }
         }
         runBlocking { deferredTxnResult.await() } shouldBe true
+    }
+
+    "It correctly uses property renaming for queries" {
+        val testKey = Key<RenamingTestModel>("RenamingTestModel", 1L)
+        withMockDatastore(RenamingTestModel(x = "value", key = testKey)) {
+            DB.query<RenamingTestModel>("RenamingTestModel") {
+                "x" eq "value"
+            }.toList().size shouldBe 1
+
+            // You can also query by the datastore name.
+            DB.query<RenamingTestModel>("RenamingTestModel") {
+                "y" eq "value"
+            }.toList().size shouldBe 1
+        }
     }
 })
