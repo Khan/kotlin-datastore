@@ -11,6 +11,8 @@ import org.khanacademy.datastore.get
 import org.khanacademy.datastore.getMulti
 import org.khanacademy.datastore.keysOnlyQuery
 import org.khanacademy.datastore.put
+import org.khanacademy.datastore.putMulti
+import org.khanacademy.datastore.Quadruple
 import org.khanacademy.datastore.query
 import org.khanacademy.datastore.toDatastoreKey
 import org.khanacademy.datastore.toKey
@@ -94,6 +96,62 @@ class DatastoreTestStubTest : StringSpec({
                 kind = "TestKind",
                 idOrName = KeyName("an-entity")
             )) shouldNotBe null
+        }
+    }
+
+    "It should get(multi) the same entities that we put(multi)" {
+        val firstKey = Key<TestKind>("TestKind", "first-key")
+        val secondKey = Key<TestQueryKind>("TestQueryKind", "second-key")
+        val thirdKey = Key<TestKind>("TestKind", "third-key")
+        val fourthKey = Key<TestKind>("TestKind", "fourth-key")
+
+        val firstKind = TestKind(firstKey)
+        val secondKind = TestQueryKind(
+            secondKey,
+            aString = "second-key",
+            aTimestamp = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC),
+            aKey = firstKey,
+            aNullableLong = null,
+            manyStrings = listOf(null))
+        val thirdKind = TestKind(thirdKey)
+        val fourthKind = TestKind(fourthKey)
+
+        // test putMulti/getMulti for two entities
+        withMockDatastore(
+            TestKind(Key("TestKind", "an-entity"))
+        ) {
+            DB.getMulti(firstKey, secondKey) shouldBe Pair(null, null)
+
+            DB.putMulti(firstKind, secondKind)
+
+            DB.getMulti(firstKey, secondKey) shouldBe
+                    Pair(firstKind, secondKind)
+        }
+
+        // test putMulti/getMulti for three entities
+        withMockDatastore(
+            TestKind(Key("TestKind", "an-entity"))
+        ) {
+            DB.getMulti(firstKey, secondKey, thirdKey) shouldBe Triple(null,
+                null, null)
+
+            DB.putMulti(firstKind, secondKind, thirdKind)
+
+            DB.getMulti(firstKey, secondKey, thirdKey) shouldBe
+                    Triple(firstKind, secondKind, thirdKind)
+        }
+
+        // test putMulti/getMulti for four entities
+        withMockDatastore(
+            TestKind(Key("TestKind", "an-entity"))
+        ) {
+            DB.getMulti(firstKey, secondKey, thirdKey, fourthKey) shouldBe
+                    Quadruple(null, null, null, null)
+
+            DB.putMulti(firstKind, secondKind, thirdKind, fourthKind)
+
+            DB.getMulti(firstKey, secondKey, thirdKey, fourthKey) shouldBe
+                    Quadruple(firstKind, secondKind, thirdKind, fourthKind)
         }
     }
 

@@ -308,7 +308,7 @@ internal operator fun Value.compareTo(other: Value): Int {
     if (indexCmp != 0) {
         return indexCmp
     }
-    return when(valueTypeCase) {
+    return when (valueTypeCase) {
         // Now, handle the (common) case the values are of the same type.
         Value.ValueTypeCase.NULL_VALUE -> 0
         Value.ValueTypeCase.BOOLEAN_VALUE ->
@@ -333,10 +333,10 @@ internal operator fun Value.compareTo(other: Value): Int {
             TODO("Implement repeated properties")
         Value.ValueTypeCase.VALUETYPE_NOT_SET, null ->
             throw IllegalArgumentException(
-                "Cannot query on values of unknown type (value ${this}).")
+                "Cannot query on values of unknown type (value $this).")
         else ->
             throw IllegalArgumentException(
-                "Unhandled value type case ${valueTypeCase}.")
+                "Unhandled value type case $valueTypeCase.")
     }
 }
 
@@ -441,6 +441,12 @@ class MockDatastore(private var entities: List<Entity>) : ThrowingDatastore() {
         val entityConverted = entity as Entity
         entities += entityConverted
         return entityConverted
+    }
+
+    override fun put(vararg entities: FullEntity<*>?): MutableList<Entity> {
+        val entitiesConverted = entities.map { it as Entity }
+        this.entities += entitiesConverted
+        return entitiesConverted.toMutableList()
     }
 
     // Checks that we match all filters that have the same name and

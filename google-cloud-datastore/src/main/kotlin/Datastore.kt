@@ -56,15 +56,19 @@ inline fun <reified A : Keyed<A>, reified B : Keyed<B>> Datastore.getMulti(
         internalGetMulti(this, a, b, A::class, B::class)
 
 inline fun <reified A : Keyed<A>, reified B : Keyed<B>, reified C : Keyed<C>>
-    Datastore.getMulti(a: Key<A>, b: Key<B>, c: Key<C>): Triple<A?, B?, C?> =
-        internalGetMulti(this, a, b, c, A::class, B::class, C::class)
+Datastore.getMulti(a: Key<A>, b: Key<B>, c: Key<C>): Triple<A?, B?, C?> =
+    internalGetMulti(this, a, b, c, A::class, B::class, C::class)
 
-inline fun <reified A : Keyed<A>, reified B : Keyed<B>, reified C : Keyed<C>,
-    reified D : Keyed<D>>
-    Datastore.getMulti(a: Key<A>, b: Key<B>, c: Key<C>, d: Key<D>):
-    Quadruple<A?, B?, C?, D?> =
-        internalGetMulti(this, a, b, c, d, A::class, B::class, C::class,
-            D::class)
+inline fun <
+    reified A : Keyed<A>,
+    reified B : Keyed<B>,
+    reified C : Keyed<C>,
+    reified D : Keyed<D>
+> Datastore.getMulti(
+    a: Key<A>, b: Key<B>, c: Key<C>, d: Key<D>
+): Quadruple<A?, B?, C?, D?> =
+    internalGetMulti(this, a, b, c, d, A::class, B::class, C::class,
+        D::class)
 /**
  * Asynchronous get by key of an object from the datastore.
  *
@@ -83,7 +87,7 @@ inline fun <reified T : Keyed<T>> Datastore.getAsync(
 inline fun <reified A : Keyed<A>, reified B : Keyed<B>> Datastore.getMultiAsync(
     a: Key<A>, b: Key<B>
 ): Deferred<Pair<A?, B?>?> =
-        internalGetMultiAsync(this, a, b, A::class, B::class)
+    internalGetMultiAsync(this, a, b, A::class, B::class)
 
 inline fun <
     reified A : Keyed<A>,
@@ -104,11 +108,41 @@ inline fun <
 ): Deferred<Quadruple<A?, B?, C?, D?>?> =
     internalGetMultiAsync(this, a, b, c, d, A::class, B::class, C::class,
         D::class)
+
 /**
  * Synchronous put of an object to the datastore.
  */
 fun <T : Keyed<T>> Datastore.put(modelInstance: Keyed<T>): Key<T> =
     this.clientOrTransaction.put(modelInstance.toDatastoreEntity()).key.toKey()
+
+/**
+ * Synchronous put of multiple objects to the datastore.
+ */
+fun <A : Keyed<A>, B : Keyed<B>> Datastore.putMulti(
+    a: A, b: B
+): Pair<Key<A>, Key<B>> {
+    val entities = this.clientOrTransaction.put(a.toDatastoreEntity(),
+        b.toDatastoreEntity())
+    return Pair(entities[0].key.toKey(), entities[1].key.toKey())
+}
+
+fun <A : Keyed<A>, B : Keyed<B>, C : Keyed<C>> Datastore.putMulti(
+    a: A, b: B, c: C
+): Triple<Key<A>, Key<B>, Key<C>> {
+    val entities = this.clientOrTransaction.put(a.toDatastoreEntity(),
+        b.toDatastoreEntity(), c.toDatastoreEntity())
+    return Triple(entities[0].key.toKey(), entities[1].key.toKey(),
+        entities[2].key.toKey())
+}
+
+fun <A : Keyed<A>, B : Keyed<B>, C : Keyed<C>, D : Keyed<D>> Datastore.putMulti(
+    a: A, b: B, c: C, d: D
+): Quadruple<Key<A>, Key<B>, Key<C>, Key<D>> {
+    val entities = this.clientOrTransaction.put(a.toDatastoreEntity(),
+        b.toDatastoreEntity(), c.toDatastoreEntity(), d.toDatastoreEntity())
+    return Quadruple(entities[0].key.toKey(), entities[1].key.toKey(),
+        entities[2].key.toKey(), entities[3].key.toKey())
+}
 
 /**
  * Asynchronous put of an object to the datastore.
@@ -119,6 +153,31 @@ fun <T : Keyed<T>> Datastore.putAsync(
     DB.async { put(modelInstance) }
 
 fun Datastore.inTransaction(): Boolean = clientOrTransaction is Transaction
+
+/**
+ * Asynchronous put of multiple objects to the datastore.
+ */
+fun <A : Keyed<A>, B : Keyed<B>> Datastore.putMultiAsync(
+    a: A, b: B
+): Deferred<Pair<Key<A>, Key<B>>> =
+    DB.async {
+        putMulti(a, b)
+    }
+
+fun <A : Keyed<A>, B : Keyed<B>, C : Keyed<C>> Datastore.putMultiAsync(
+    a: A, b: B, c: C
+): Deferred<Triple<Key<A>, Key<B>, Key<C>>> =
+    DB.async {
+        putMulti(a, b, c)
+    }
+
+fun <A : Keyed<A>, B : Keyed<B>, C : Keyed<C>, D : Keyed<D>>
+Datastore.putMultiAsync(
+    a: A, b: B, c: C, d: D
+): Deferred<Quadruple<Key<A>, Key<B>, Key<C>, Key<D>>> =
+    DB.async {
+        putMulti(a, b, c, d)
+    }
 
 /**
  * Query for objects matching all the given filters.
@@ -371,7 +430,8 @@ fun <T : Keyed<T>> internalGetAsync(
  * Internal Datastore.getMultiAsync used as an inlining target.
  */
 fun <A : Keyed<A>, B : Keyed<B>> internalGetMultiAsync(
-        datastore: Datastore, a: Key<A>, b: Key<B>, aClass: KClass<A>, bClass: KClass<B>
+    datastore: Datastore, a: Key<A>, b: Key<B>, aClass: KClass<A>,
+    bClass: KClass<B>
 ): Deferred<Pair<A?, B?>?> = datastore.async {
     internalGetMulti(datastore, a, b, aClass, bClass)
 }
@@ -384,7 +444,7 @@ fun <A : Keyed<A>, B : Keyed<B>, C : Keyed<C>> internalGetMultiAsync(
 }
 
 fun <A : Keyed<A>, B : Keyed<B>, C : Keyed<C>, D : Keyed<D>>
-        internalGetMultiAsync(
+internalGetMultiAsync(
     datastore: Datastore, a: Key<A>, b: Key<B>, c: Key<C>, d: Key<D>,
     aClass: KClass<A>, bClass: KClass<B>, cClass: KClass<C>, dClass: KClass<D>
 ): Deferred<Quadruple<A?, B?, C?, D?>?> = datastore.async {
