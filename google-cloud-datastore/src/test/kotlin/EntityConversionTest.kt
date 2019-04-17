@@ -5,6 +5,7 @@ import com.google.cloud.datastore.Blob
 import com.google.cloud.datastore.Entity
 import com.google.cloud.datastore.EntityValue
 import com.google.cloud.datastore.IncompleteKey
+import com.google.cloud.datastore.LatLng
 import com.google.cloud.datastore.NullValue
 import com.google.cloud.datastore.StringValue
 import com.google.cloud.datastore.TimestampValue
@@ -12,6 +13,7 @@ import com.google.cloud.datastore.Value
 import io.kotlintest.shouldBe
 import io.kotlintest.shouldThrow
 import io.kotlintest.specs.StringSpec
+import org.khanacademy.metadata.GeoPt
 import org.khanacademy.metadata.Key
 import org.khanacademy.metadata.KeyName
 import org.khanacademy.metadata.Keyed
@@ -29,6 +31,7 @@ data class PrimitiveTestModel(
     val aBool: Boolean?,
     val aDouble: Double?,
     val someBytes: ByteArray?,
+    val aGeoPt: GeoPt?,
     val aTimestamp: LocalDateTime?,
     val nonNullableBool: Boolean,
     val nonNullableBytes: ByteArray,
@@ -103,6 +106,7 @@ class EntityConversionTest : StringSpec({
             .set("aBool", true)
             .set("aDouble", 2.71828)
             .set("aTimestamp", Timestamp.ofTimeSecondsAndNanos(0, 0))
+            .set("aGeoPt", LatLng.of(1.0, 2.0))
             .set("someBytes", Blob.copyFrom("abcdefg".toByteArray()))
             .set("nonNullableBool", false)
             .set("nonNullableBytes", Blob.copyFrom("hijklmn".toByteArray()))
@@ -119,6 +123,7 @@ class EntityConversionTest : StringSpec({
         converted.aTimestamp shouldBe LocalDateTime.ofInstant(
             Instant.EPOCH,
             ZoneId.of("UTC"))
+        converted.aGeoPt shouldBe GeoPt(latitude = 1.0, longitude = 2.0)
         String(converted.someBytes ?: ByteArray(0)) shouldBe "abcdefg"
     }
 
@@ -191,6 +196,7 @@ class EntityConversionTest : StringSpec({
             .set("aDouble", NullValue())
             .set("someBytes", NullValue())
             .set("aTimestamp", NullValue())
+            .set("aGeoPt", NullValue())
             .set("nonNullableBool", true)
             .set("nonNullableBytes", Blob.copyFrom("not null!".toByteArray()))
             .build()
@@ -201,6 +207,7 @@ class EntityConversionTest : StringSpec({
         converted.aDouble shouldBe null
         converted.someBytes shouldBe null
         converted.aTimestamp shouldBe null
+        converted.aGeoPt shouldBe null
     }
 
     "It should correctly transfer basic fields to the entity" {
@@ -216,6 +223,7 @@ class EntityConversionTest : StringSpec({
             aDouble = 9.0,
             someBytes = "byte_value".toByteArray(),
             aTimestamp = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC),
+            aGeoPt = GeoPt(latitude = 3.0, longitude = 4.0),
             nonNullableBool = false,
             nonNullableBytes = "byte_value_2".toByteArray(),
             key = testKey)
@@ -227,6 +235,8 @@ class EntityConversionTest : StringSpec({
         entity.getDouble("aDouble") shouldBe 9.0
         String(entity.getBlob("someBytes").toByteArray()) shouldBe "byte_value"
         entity.getTimestamp("aTimestamp").seconds shouldBe 0
+        entity.getLatLng("aGeoPt").latitude shouldBe 3.0
+        entity.getLatLng("aGeoPt").longitude shouldBe 4.0
         entity.getBoolean("nonNullableBool") shouldBe false
         String(entity.getBlob("nonNullableBytes").toByteArray()) shouldBe
             "byte_value_2"
@@ -247,6 +257,7 @@ class EntityConversionTest : StringSpec({
             aDouble = 9.0,
             someBytes = "byte_value".toByteArray(),
             aTimestamp = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC),
+            aGeoPt = null,
             nonNullableBool = false,
             nonNullableBytes = "byte_value_2".toByteArray(),
             key = testKey)

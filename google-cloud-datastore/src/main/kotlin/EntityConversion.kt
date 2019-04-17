@@ -14,12 +14,15 @@ import com.google.cloud.datastore.EntityValue
 import com.google.cloud.datastore.FullEntity
 import com.google.cloud.datastore.IncompleteKey
 import com.google.cloud.datastore.KeyValue
+import com.google.cloud.datastore.LatLng
+import com.google.cloud.datastore.LatLngValue
 import com.google.cloud.datastore.ListValue
 import com.google.cloud.datastore.LongValue
 import com.google.cloud.datastore.NullValue
 import com.google.cloud.datastore.StringValue
 import com.google.cloud.datastore.TimestampValue
 import com.google.cloud.datastore.Value
+import org.khanacademy.metadata.GeoPt
 import org.khanacademy.metadata.Key
 import org.khanacademy.metadata.KeyID
 import org.khanacademy.metadata.KeyName
@@ -260,6 +263,7 @@ internal fun fromDatastoreType(datastoreValue: Any?, targetType: KType): Any? =
         is Blob -> datastoreValue.toByteArray()
         is Timestamp -> convertTimestamp(datastoreValue)
         is com.google.cloud.datastore.Key -> convertKeyUntyped(datastoreValue)
+        is LatLng -> GeoPt(datastoreValue.latitude, datastoreValue.longitude)
         is FullEntity<*> ->
             // Note that .jvmErasure is here just a mechanism for converting
             // our KType to a KClass.
@@ -277,6 +281,7 @@ internal fun toDatastoreType(kotlinValue: Any?): Any? =
             kotlinValue.toEpochSecond(ZoneOffset.UTC),
             kotlinValue.nano)
         is Key<*> -> kotlinValue.toDatastoreKey()
+        is GeoPt -> LatLng.of(kotlinValue.latitude, kotlinValue.longitude)
         is Property -> objectToDatastoreEntity(kotlinValue)
         else -> kotlinValue
     }
@@ -320,6 +325,11 @@ private val EntityPropertyTypes = listOf(
     Property::class.createType().withNullability(true)
 )
 
+private val GeoPtPropertyTypes = listOf(
+    GeoPt::class.createType(),
+    GeoPt::class.createType().withNullability(true)
+)
+
 internal fun KType.isListType(): Boolean =
     arguments.isNotEmpty() && this == List::class.createType(arguments)
 
@@ -341,6 +351,7 @@ internal fun FullEntity<*>.getExistingTypedProperty(
     type in LongTypes -> if (isNull(name)) null else getLong(name)
     type in StringTypes -> getString(name)
     type in TimestampTypes -> getTimestamp(name)
+    type in GeoPtPropertyTypes -> getLatLng(name)
     type.isStructuredPropertyType() -> // Is a StructuredProperty<T>
         getExistingStructuredProperty(
             name, type.unwrapSinglyParameterizedType())
@@ -409,6 +420,9 @@ internal fun propertyValueToDatastoreValue(
         .setExcludeFromIndexes(!indexed)
         .build()
     is Timestamp -> TimestampValue.newBuilder(datastoreValue)
+        .setExcludeFromIndexes(!indexed)
+        .build()
+    is LatLng -> LatLngValue.newBuilder(datastoreValue)
         .setExcludeFromIndexes(!indexed)
         .build()
     is List<*> -> ListValue.newBuilder()
