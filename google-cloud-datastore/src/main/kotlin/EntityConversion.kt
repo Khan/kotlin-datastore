@@ -32,7 +32,9 @@ import org.khanacademy.metadata.Meta
 import org.khanacademy.metadata.Property
 import org.khanacademy.metadata.StructuredProperty
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlin.reflect.KAnnotatedElement
@@ -261,7 +263,11 @@ internal fun convertKeyUntyped(datastoreKey: DatastoreKey): Key<*>? {
 internal fun fromDatastoreType(datastoreValue: Any?, targetType: KType): Any? =
     when (datastoreValue) {
         is Blob -> datastoreValue.toByteArray()
-        is Timestamp -> convertTimestamp(datastoreValue)
+        is Timestamp -> when (targetType) {
+            in DateTypes -> convertTimestamp(datastoreValue).toLocalDate()
+            in TimeTypes -> convertTimestamp(datastoreValue).toLocalTime()
+            else -> convertTimestamp(datastoreValue)
+        }
         is com.google.cloud.datastore.Key -> convertKeyUntyped(datastoreValue)
         is LatLng -> GeoPt(datastoreValue.latitude, datastoreValue.longitude)
         is FullEntity<*> ->
@@ -280,6 +286,10 @@ internal fun toDatastoreType(kotlinValue: Any?): Any? =
         is LocalDateTime -> Timestamp.ofTimeSecondsAndNanos(
             kotlinValue.toEpochSecond(ZoneOffset.UTC),
             kotlinValue.nano)
+        is LocalDate -> toDatastoreType(kotlinValue.atStartOfDay())
+        is LocalTime -> toDatastoreType(kotlinValue.atDate(
+            LocalDate.of(1970, 1, 1)
+        ))
         is Key<*> -> kotlinValue.toDatastoreKey()
         is GeoPt -> LatLng.of(kotlinValue.latitude, kotlinValue.longitude)
         is Property -> objectToDatastoreEntity(kotlinValue)
@@ -320,6 +330,16 @@ private val TimestampTypes = listOf(
     LocalDateTime::class.createType().withNullability(true)
 )
 
+private val DateTypes = listOf(
+    LocalDate::class.createType(),
+    LocalDate::class.createType().withNullability(true)
+)
+
+private val TimeTypes = listOf(
+    LocalTime::class.createType(),
+    LocalTime::class.createType().withNullability(true)
+)
+
 private val EntityPropertyTypes = listOf(
     Property::class.createType(),
     Property::class.createType().withNullability(true)
@@ -350,7 +370,9 @@ internal fun FullEntity<*>.getExistingTypedProperty(
     type in DoubleTypes -> if (isNull(name)) null else getDouble(name)
     type in LongTypes -> if (isNull(name)) null else getLong(name)
     type in StringTypes -> getString(name)
-    type in TimestampTypes -> getTimestamp(name)
+    type in TimestampTypes ||
+    type in DateTypes ||
+    type in TimeTypes -> getTimestamp(name)
     type in GeoPtPropertyTypes -> getLatLng(name)
     type.isStructuredPropertyType() -> // Is a StructuredProperty<T>
         getExistingStructuredProperty(

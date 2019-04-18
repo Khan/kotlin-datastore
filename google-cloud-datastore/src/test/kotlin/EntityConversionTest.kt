@@ -20,7 +20,9 @@ import org.khanacademy.metadata.Keyed
 import org.khanacademy.metadata.Property
 import org.khanacademy.metadata.StructuredProperty
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 
@@ -33,6 +35,8 @@ data class PrimitiveTestModel(
     val someBytes: ByteArray?,
     val aGeoPt: GeoPt?,
     val aTimestamp: LocalDateTime?,
+    val aDate: LocalDate?,
+    val aTime: LocalTime?,
     val nonNullableBool: Boolean,
     val nonNullableBytes: ByteArray,
     override val key: Key<PrimitiveTestModel>
@@ -106,6 +110,8 @@ class EntityConversionTest : StringSpec({
             .set("aBool", true)
             .set("aDouble", 2.71828)
             .set("aTimestamp", Timestamp.ofTimeSecondsAndNanos(0, 0))
+            .set("aDate", Timestamp.ofTimeSecondsAndNanos(86400, 0))
+            .set("aTime", Timestamp.ofTimeSecondsAndNanos(63, 0))
             .set("aGeoPt", LatLng.of(1.0, 2.0))
             .set("someBytes", Blob.copyFrom("abcdefg".toByteArray()))
             .set("nonNullableBool", false)
@@ -123,6 +129,8 @@ class EntityConversionTest : StringSpec({
         converted.aTimestamp shouldBe LocalDateTime.ofInstant(
             Instant.EPOCH,
             ZoneId.of("UTC"))
+        converted.aDate shouldBe LocalDate.of(1970, 1, 2)
+        converted.aTime shouldBe LocalTime.of(0, 1, 3)
         converted.aGeoPt shouldBe GeoPt(latitude = 1.0, longitude = 2.0)
         String(converted.someBytes ?: ByteArray(0)) shouldBe "abcdefg"
     }
@@ -196,6 +204,8 @@ class EntityConversionTest : StringSpec({
             .set("aDouble", NullValue())
             .set("someBytes", NullValue())
             .set("aTimestamp", NullValue())
+            .set("aDate", NullValue())
+            .set("aTime", NullValue())
             .set("aGeoPt", NullValue())
             .set("nonNullableBool", true)
             .set("nonNullableBytes", Blob.copyFrom("not null!".toByteArray()))
@@ -207,6 +217,8 @@ class EntityConversionTest : StringSpec({
         converted.aDouble shouldBe null
         converted.someBytes shouldBe null
         converted.aTimestamp shouldBe null
+        converted.aDate shouldBe null
+        converted.aTime shouldBe null
         converted.aGeoPt shouldBe null
     }
 
@@ -223,6 +235,8 @@ class EntityConversionTest : StringSpec({
             aDouble = 9.0,
             someBytes = "byte_value".toByteArray(),
             aTimestamp = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC),
+            aDate = LocalDate.of(2019, 4, 17),
+            aTime = LocalTime.of(0, 1, 2),
             aGeoPt = GeoPt(latitude = 3.0, longitude = 4.0),
             nonNullableBool = false,
             nonNullableBytes = "byte_value_2".toByteArray(),
@@ -235,6 +249,10 @@ class EntityConversionTest : StringSpec({
         entity.getDouble("aDouble") shouldBe 9.0
         String(entity.getBlob("someBytes").toByteArray()) shouldBe "byte_value"
         entity.getTimestamp("aTimestamp").seconds shouldBe 0
+        entity.getTimestamp("aDate").seconds shouldBe
+            LocalDateTime.of(2019, 4, 17, 0, 0, 0)
+                .toEpochSecond(ZoneOffset.UTC)
+        entity.getTimestamp("aTime").seconds shouldBe 62
         entity.getLatLng("aGeoPt").latitude shouldBe 3.0
         entity.getLatLng("aGeoPt").longitude shouldBe 4.0
         entity.getBoolean("nonNullableBool") shouldBe false
@@ -257,6 +275,8 @@ class EntityConversionTest : StringSpec({
             aDouble = 9.0,
             someBytes = "byte_value".toByteArray(),
             aTimestamp = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC),
+            aDate = LocalDate.of(2019, 4, 17),
+            aTime = LocalTime.of(0, 1, 2),
             aGeoPt = null,
             nonNullableBool = false,
             nonNullableBytes = "byte_value_2".toByteArray(),
