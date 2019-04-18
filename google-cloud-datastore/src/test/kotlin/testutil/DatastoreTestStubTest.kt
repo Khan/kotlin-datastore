@@ -8,8 +8,11 @@ import io.kotlintest.specs.StringSpec
 import org.khanacademy.datastore.DB
 import org.khanacademy.datastore.Datastore
 import org.khanacademy.datastore.get
+import org.khanacademy.datastore.getMulti
 import org.khanacademy.datastore.keysOnlyQuery
 import org.khanacademy.datastore.put
+import org.khanacademy.datastore.putMulti
+import org.khanacademy.datastore.Quadruple
 import org.khanacademy.datastore.query
 import org.khanacademy.datastore.toDatastoreKey
 import org.khanacademy.datastore.toKey
@@ -96,6 +99,62 @@ class DatastoreTestStubTest : StringSpec({
         }
     }
 
+    "It should get(multi) the same entities that we put(multi)" {
+        val firstKey = Key<TestKind>("TestKind", "first-key")
+        val secondKey = Key<TestQueryKind>("TestQueryKind", "second-key")
+        val thirdKey = Key<TestKind>("TestKind", "third-key")
+        val fourthKey = Key<TestKind>("TestKind", "fourth-key")
+
+        val firstKind = TestKind(firstKey)
+        val secondKind = TestQueryKind(
+            secondKey,
+            aString = "second-key",
+            aTimestamp = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC),
+            aKey = firstKey,
+            aNullableLong = null,
+            manyStrings = listOf(null))
+        val thirdKind = TestKind(thirdKey)
+        val fourthKind = TestKind(fourthKey)
+
+        // test putMulti/getMulti for two entities
+        withMockDatastore(
+            TestKind(Key("TestKind", "an-entity"))
+        ) {
+            DB.getMulti(firstKey, secondKey) shouldBe Pair(null, null)
+
+            DB.putMulti(firstKind, secondKind)
+
+            DB.getMulti(firstKey, secondKey) shouldBe
+                    Pair(firstKind, secondKind)
+        }
+
+        // test putMulti/getMulti for three entities
+        withMockDatastore(
+            TestKind(Key("TestKind", "an-entity"))
+        ) {
+            DB.getMulti(firstKey, secondKey, thirdKey) shouldBe Triple(null,
+                null, null)
+
+            DB.putMulti(firstKind, secondKind, thirdKind)
+
+            DB.getMulti(firstKey, secondKey, thirdKey) shouldBe
+                    Triple(firstKind, secondKind, thirdKind)
+        }
+
+        // test putMulti/getMulti for four entities
+        withMockDatastore(
+            TestKind(Key("TestKind", "an-entity"))
+        ) {
+            DB.getMulti(firstKey, secondKey, thirdKey, fourthKey) shouldBe
+                    Quadruple(null, null, null, null)
+
+            DB.putMulti(firstKind, secondKind, thirdKind, fourthKind)
+
+            DB.getMulti(firstKey, secondKey, thirdKey, fourthKey) shouldBe
+                    Quadruple(firstKind, secondKind, thirdKind, fourthKind)
+        }
+    }
+
     val queryFixtures = listOf(
         TestQueryKind(
             key = Key("TestQueryKind", 1),
@@ -164,6 +223,34 @@ class DatastoreTestStubTest : StringSpec({
             key = Key("TestKind", 1)
         )
     )
+
+    "It should return the expected models in the order they were requested" {
+        withMockDatastore(queryFixtures) {
+            // when there is a key that does not have an entity matching, put
+            // null in its place in the return value.
+            val pair = DB.getMulti(Key<TestKind>("TestKind", 9),
+                Key<TestQueryKind>("TestQueryKind", 4))
+            pair.first?.key shouldBe null
+            pair.second?.key shouldBe Key<TestQueryKind>("TestQueryKind", 4)
+
+            // test the return values across the supported capacities (2, 3, 4)
+            val trip = DB.getMulti(Key<TestKind>("TestKind", 1),
+                Key<TestQueryKind>("TestQueryKind", 2),
+                Key<TestQueryKind>("TestQueryKind", 3))
+            trip.first?.key shouldBe Key<TestKind>("TestKind", 1)
+            trip.second?.key shouldBe Key<TestQueryKind>("TestQueryKind", 2)
+            trip.third?.key shouldBe Key<TestQueryKind>("TestQueryKind", 3)
+
+            val quad = DB.getMulti(Key<TestKind>("TestKind", 1),
+                Key<TestQueryKind>("TestQueryKind", 2),
+                Key<TestQueryKind>("TestQueryKind", 3),
+                Key<TestQueryKind>("TestQueryKind", 1))
+            quad.first?.key shouldBe Key<TestKind>("TestKind", 1)
+            quad.second?.key shouldBe Key<TestQueryKind>("TestQueryKind", 2)
+            quad.third?.key shouldBe Key<TestQueryKind>("TestQueryKind", 3)
+            quad.fourth?.key shouldBe Key<TestQueryKind>("TestQueryKind", 1)
+        }
+    }
 
     "It should correctly evaluate simple equality queries" {
         withMockDatastore(queryFixtures) {
