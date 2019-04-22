@@ -8,9 +8,11 @@ import io.kotlintest.specs.StringSpec
 import org.khanacademy.datastore.DB
 import org.khanacademy.datastore.Datastore
 import org.khanacademy.datastore.Quadruple
+import org.khanacademy.datastore.SortOrder
 import org.khanacademy.datastore.get
 import org.khanacademy.datastore.getMulti
 import org.khanacademy.datastore.keysOnlyQuery
+import org.khanacademy.datastore.orderBy
 import org.khanacademy.datastore.put
 import org.khanacademy.datastore.putMulti
 import org.khanacademy.datastore.query
@@ -529,6 +531,87 @@ class DatastoreTestStubTest : StringSpec({
                 DB.get(key)?.aNullableLong shouldBe 42L
             }
             DB.get(key)?.aNullableLong shouldBe 43L
+        }
+    }
+
+    "It should correctly order queries (ascending)" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>(
+                "TestQueryKind",
+                orderBy("aNullableLong")
+            ) {
+                "aNullableLong" gt -10000L
+            }.toList()
+            result[0].aNullableLong shouldBe -42L
+        }
+    }
+
+    "It should correctly order queries (descending)" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>(
+                "TestQueryKind",
+                orderBy("aNullableLong", SortOrder.DESC)
+            ) {
+                "aNullableLong" gt -10000L
+            }.toList()
+            result[0].aNullableLong shouldBe 42L
+        }
+    }
+
+    "It correctly orders queries on repeated properties (asc)" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>(
+                "TestQueryKind",
+                orderBy("manyStrings", SortOrder.ASC)
+            ) {
+                "aString" ge "a"
+            }.toList()
+            // Entity 3 and 4 both have null as a value, and 3 was inserted
+            // first, which is the implementation-dependent ordering the stub
+            // uses.
+            result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 3)
+        }
+    }
+
+    "It correctly orders queries on repeated properties (desc)" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>(
+                "TestQueryKind",
+                orderBy("manyStrings", SortOrder.DESC)
+            ) {
+                "aString" ge "a"
+            }.toList()
+            // Entity 4 has the maximum value ("42") and there are no ties.
+            result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 4)
+        }
+    }
+
+    "It correctly orders queries on filtered repeated properties (asc)" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>(
+                "TestQueryKind",
+                orderBy("manyStrings", SortOrder.ASC)
+            ) {
+                "manyStrings" ge "2"
+            }.toList()
+            // Entity 1 has the tied minimum value ("2") that satisfies the
+            // query, and it was inserted first, which is the
+            // implementation-dependent ordering the stub uses.
+            result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 1)
+        }
+    }
+
+    "It correctly orders queries on filtered repeated properties (desc)" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>(
+                "TestQueryKind",
+                orderBy("manyStrings", SortOrder.DESC)
+            ) {
+                "manyStrings" ge "2"
+            }.toList()
+            // Entity 4 has the maximum value ("42") that satisfies the
+            // query, and there are no ties.
+            result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 4)
         }
     }
 })

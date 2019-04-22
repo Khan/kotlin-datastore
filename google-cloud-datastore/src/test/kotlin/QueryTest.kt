@@ -1,6 +1,7 @@
 package org.khanacademy.datastore
 
 import com.google.cloud.datastore.DatastoreTypeConverter
+import com.google.cloud.datastore.StructuredQuery
 import com.google.datastore.v1.PropertyFilter
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.StringSpec
@@ -142,5 +143,37 @@ class QueryTest : StringSpec({
             AncestorQueryFilter(
                 Key<KeyTestModel>("KeyTestModel", "the-first-one"))
         )
+    }
+
+    "It correctly applies default query non-ordering" {
+        val builder = com.google.cloud.datastore.Query.newEntityQueryBuilder()
+            .applyOrdering(NoOrdering)
+        builder.build().orderBy shouldBe listOf<StructuredQuery.OrderBy>()
+    }
+
+    "It correctly applies single ordering" {
+        val builder = com.google.cloud.datastore.Query.newEntityQueryBuilder()
+            .applyOrdering(orderBy("aField", SortOrder.DESC))
+        val query = builder.build()
+        query.orderBy.size shouldBe 1
+        query.orderBy[0].property shouldBe "aField"
+        query.orderBy[0].direction shouldBe
+            StructuredQuery.OrderBy.Direction.DESCENDING
+    }
+
+    "It correctly applies multiple ordering" {
+        val builder = com.google.cloud.datastore.Query.newEntityQueryBuilder()
+            .applyOrdering(orderBy(
+                Pair("aField", SortOrder.DESC),
+                Pair("anotherField", SortOrder.ASC)
+            ))
+        val query = builder.build()
+        query.orderBy.size shouldBe 2
+        query.orderBy[0].property shouldBe "aField"
+        query.orderBy[0].direction shouldBe
+            StructuredQuery.OrderBy.Direction.DESCENDING
+        query.orderBy[1].property shouldBe "anotherField"
+        query.orderBy[1].direction shouldBe
+            StructuredQuery.OrderBy.Direction.ASCENDING
     }
 })

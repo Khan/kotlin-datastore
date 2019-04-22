@@ -341,6 +341,13 @@ internal operator fun Value.compareTo(other: Value): Int {
     }
 }
 
+internal data class ComparableValue(
+    val value: Value
+) : Comparable<ComparableValue> {
+    override operator fun compareTo(other: ComparableValue): Int =
+        this.value.compareTo(other.value)
+}
+
 /**
  * Return a list of the ancestors (prefixes) of this key, including itself.
  *
@@ -357,6 +364,9 @@ private fun Key.ancestors(): List<Key> {
     return ancestors
 }
 
+private fun Value.isArray(): Boolean =
+    valueTypeCase == Value.ValueTypeCase.ARRAY_VALUE
+
 /**
  * Does the provided entity match the given filter?
  *
@@ -371,7 +381,7 @@ internal fun entityMatches(
 
     // matchesFilters(), the caller of entityMatches(), should have
     // already filtered out the array case.
-    assert(entityValue.valueTypeCase != Value.ValueTypeCase.ARRAY_VALUE)
+    assert(!entityValue.isArray())
 
     // TODO(colin): should we complain if
     //    filter.value.valueTypeCase != entityValue.valueTypeCase
@@ -557,15 +567,14 @@ class MockDatastore(
         // Note if filters[0] is an inequality filter, they all are,
         // because of how we grouped the filters.
         return when {
-            entityValue.valueTypeCase == Value.ValueTypeCase.ARRAY_VALUE &&
-            filters[0].isInequalityFilter() ->
+            entityValue.isArray() && filters[0].isInequalityFilter() ->
                 entityValue.arrayValue.valuesList.any { value ->
                     filters.all {
                         filter -> entityMatches(entity.key, value, filter)
                     }
                 }
 
-            entityValue.valueTypeCase == Value.ValueTypeCase.ARRAY_VALUE ->
+            entityValue.isArray() ->
                 // This is equality for arrays, we do the "normal"
                 // thing where we match filter-by-filter: each equality
                 // filter passes if the filter-string is present in our array.
@@ -580,6 +589,110 @@ class MockDatastore(
                 filters.all {
                     filter -> entityMatches(entity.key, entityValue, filter)
                 }
+        }
+    }
+
+    /**
+     * Get a comparable value to use in an array-valued-property ordering.
+     *
+     * Array-valued properties compare in surprising ways! See
+     * https://cloud.google.com/datastore/docs/concepts/queries#properties_with_array_values_can_behave_in_surprising_ways
+     *
+     * To summarize, if there's no filter on the property by which we're
+     * ordering, we use the min value for ascending order, or the max value for
+     * descending. If there is an inequality filter on this property, we do the
+     * same, but only looking at values that pass the filter. If there is an
+     * equality filter on this property, we ignore any sort order.
+     *
+     * Note that if the array value is empty, it is effectively filtered out of
+     * any ordered results (even if there is no filter on that property)!
+     * Callers should already have done this filtering.
+     */
+    private fun arrayValuedComparable(
+        condition: StructuredQuery.OrderBy,
+        filters: List<PropertyFilter>,
+        propertyValue: Value
+    ): ComparableValue {
+        val filtersForProperty = filters.filter {
+            it.property.name == condition.property
+        }
+        return when {
+            filtersForProperty.isEmpty() ->
+                if (condition.direction ==
+                    StructuredQuery.OrderBy.Direction.ASCENDING) {
+                    ComparableValue(
+                        propertyValue.arrayValue.valuesList.minBy {
+                            ComparableValue(it)
+                        } ?: throw IllegalStateException(
+                            "Callers must filter out empty-array values.")
+                    )
+                } else {
+                    ComparableValue(
+                        propertyValue.arrayValue.valuesList.maxBy {
+                            ComparableValue(it)
+                        } ?: throw IllegalStateException(
+                            "Callers must filter out empty-array values.")
+                    )
+                }
+            filtersForProperty.all { it.isInequalityFilter() } -> {
+                val valuesToExamine = propertyValue.arrayValue.valuesList
+                    .filter { value ->
+                        filtersForProperty.all { propertyFilter ->
+                            entityMatches(
+                                // Use a dummy key, as that only applies to
+                                // ancestor filters, which we won't be
+                                // considering here.
+                                Key.newBuilder("project", "kind", "id")
+                                    .build(),
+                                value,
+                                propertyFilter)
+                        }
+                    }
+                if (condition.direction ==
+                    StructuredQuery.OrderBy.Direction.ASCENDING) {
+                    ComparableValue(
+                        valuesToExamine.minBy {
+                            ComparableValue(it)
+                        } ?: throw IllegalStateException(
+                            "Callers must filter out empty-array values.")
+                    )
+                } else {
+                    ComparableValue(
+                        valuesToExamine.maxBy {
+                            ComparableValue(it)
+                        } ?: throw IllegalStateException(
+                            "Callers must filter out empty-array values.")
+                    )
+                }
+            }
+            else ->
+                // We ignore sort order for any equality filters, which we do
+                // by just returning a constant value for all entities.
+                ComparableValue(Value.newBuilder().setIntegerValue(0).build())
+        }
+    }
+
+    private fun queryComparator(
+        condition: StructuredQuery.OrderBy,
+        filters: List<PropertyFilter>
+    ): Comparator<Entity> {
+        val comparator = compareBy<Entity> { entity ->
+            val propertyValue = DatastoreTypeConverter.valueToPb(
+                entity.getValue(condition.property))
+            if (propertyValue.isArray()) {
+                arrayValuedComparable(condition, filters, propertyValue)
+            } else {
+                ComparableValue(propertyValue)
+            }
+        }
+        return when (condition.direction) {
+            StructuredQuery.OrderBy.Direction.ASCENDING ->
+                comparator
+            StructuredQuery.OrderBy.Direction.DESCENDING ->
+                comparator.reversed()
+            else ->
+                throw IllegalArgumentException(
+                    "Query order must either be ascending or descending")
         }
     }
 
@@ -609,7 +722,7 @@ class MockDatastore(
             Pair(it.property.name, it.isInequalityFilter())
         }
 
-        return entities
+        val filteredResult = entities
             .filter { entity -> entity.key.kind == query.kind }
             .filter { entity ->
                 // We consider each filter-group in sequence, the
@@ -618,6 +731,26 @@ class MockDatastore(
                     matchesFiltersForField(entity, entry.value)
                 }
             }
+        return if (structuredQuery.orderBy.isEmpty()) {
+            filteredResult
+        } else {
+            val initial = queryComparator(
+                structuredQuery.orderBy.first(), allFilters)
+            val comparator = structuredQuery.orderBy
+                .drop(1)
+                .fold(initial) { comp, condition ->
+                    comp.then(queryComparator(condition, allFilters))
+                }
+            // If we happen to be ordering on a repeated property, then this has
+            // the additional effect of filtering out empty-array values!
+            filteredResult.filterNot { entity ->
+                structuredQuery.orderBy.any { order ->
+                    val value = DatastoreTypeConverter.valueToPb(
+                        entity.getValue(order.property))
+                    value.isArray() && value.arrayValue.valuesList.isEmpty()
+                }
+            }.sortedWith(comparator)
+        }
     }
 
     private fun runKeys(query: Query<*>?): List<DatastoreKey> =

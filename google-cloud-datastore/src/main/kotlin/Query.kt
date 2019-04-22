@@ -13,6 +13,7 @@ package org.khanacademy.datastore
 import com.google.cloud.Timestamp
 import com.google.cloud.datastore.Blob
 import com.google.cloud.datastore.NullValue
+import com.google.cloud.datastore.StructuredQuery
 import com.google.cloud.datastore.StructuredQuery.PropertyFilter
 import org.khanacademy.metadata.Key
 import kotlin.reflect.KClass
@@ -30,6 +31,91 @@ enum class FieldCondition {
     GREATER_THAN,
     GREATER_THAN_OR_EQUAL,
 }
+
+/**
+ * Sort order for a query with an ordering clause.
+ */
+enum class SortOrder {
+    ASC,
+    DESC;
+
+    companion object {
+        val DEFAULT = SortOrder.ASC
+    }
+}
+
+/**
+ * Interface for a possible query result ordering.
+ *
+ * Most clients of the library should not use this directly. Instead use one of
+ * the `orderBy` functions in this file, below.
+ */
+interface OrderBy {
+    fun <T> applyToBuilder(
+        builder: StructuredQuery.Builder<T>
+    ): StructuredQuery.Builder<T>
+}
+
+internal fun <T> StructuredQuery.Builder<T>.applyOrdering(
+    ordering: OrderBy
+): StructuredQuery.Builder<T> = ordering.applyToBuilder(this)
+
+/**
+ * Default OrderBy implementation that doesn't do any ordering.
+ *
+ * This is used as the default for queries if you don't supply an ordering.
+ */
+object NoOrdering : OrderBy {
+    override fun <T> applyToBuilder(
+        builder: StructuredQuery.Builder<T>
+    ): StructuredQuery.Builder<T> = builder
+}
+
+/**
+ * Convert a field name and sort order to the google client library form.
+ */
+internal fun toStructuredQueryOrderBy(
+    ordering: Pair<String, SortOrder>
+): StructuredQuery.OrderBy {
+    val (fieldName, direction) = ordering
+    return when (direction) {
+        SortOrder.ASC -> StructuredQuery.OrderBy.asc(fieldName)
+        SortOrder.DESC -> StructuredQuery.OrderBy.desc(fieldName)
+    }
+}
+
+/**
+ * Apply any number of orderings to a datastore query.
+ *
+ * Arguments are (field name, sort order) pairs.
+ *
+ * This function assumes you have created the necessary index, and we do not
+ * verify this.
+ */
+fun orderBy(
+    vararg orderings: Pair<String, SortOrder>
+): OrderBy = object : OrderBy {
+    override fun <T> applyToBuilder(
+        builder: StructuredQuery.Builder<T>
+    ): StructuredQuery.Builder<T> {
+        if (orderings.size == 0) {
+            throw IllegalArgumentException(
+                "Must provide at least one field for ordering")
+        }
+        val converted = orderings.map(::toStructuredQueryOrderBy)
+        val firstOrdering = converted.first()
+        val otherOrderings = converted.drop(1).toTypedArray()
+        return builder.setOrderBy(firstOrdering, *otherOrderings)
+    }
+}
+
+/**
+ * Convenience function to apply a single ordering to a datastore query.
+ */
+fun orderBy(
+    fieldName: String,
+    direction: SortOrder = SortOrder.DEFAULT
+): OrderBy = orderBy(fieldName to direction)
 
 /**
  * Basic filter on a single property by equality or inequality.

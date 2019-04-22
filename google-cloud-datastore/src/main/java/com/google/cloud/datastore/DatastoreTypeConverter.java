@@ -26,6 +26,10 @@ public class DatastoreTypeConverter {
         return filter.toPb();
     }
 
+    public static com.google.datastore.v1.Value valueToPb(Value value) {
+        return value.toPb();
+    }
+
     public static Key keyToPb(com.google.cloud.datastore.Key key) {
         return key.toPb();
     }

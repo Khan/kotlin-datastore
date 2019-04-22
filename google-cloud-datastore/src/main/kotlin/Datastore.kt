@@ -214,8 +214,8 @@ Datastore.putMultiAsync(
  * For technical reasons, this is implemented out of line, below.
  */
 inline fun <reified T : Keyed<T>> Datastore.query(
-    kind: String, vararg filters: QueryFilter
-): Sequence<T> = internalQuery(this, kind, filters.toList(), T::class)
+    kind: String, order: OrderBy = NoOrdering, vararg filters: QueryFilter
+): Sequence<T> = internalQuery(this, kind, order, filters.toList(), T::class)
 
 /**
  * Query DSL for all objects matching the given filters.
@@ -228,18 +228,29 @@ inline fun <reified T : Keyed<T>> Datastore.query(
  *
  * Usage example:
  *
- * DB.query<SomeModelClass> {
+ * DB.query<SomeModelClass>("SomeModelClass", orderBy("aProperty")) {
  *     "aProperty" eq 3
  *     "somethingElse" lt "abcd"
  * }
  *
+ * Usage example with multiple orderings:
+ *
+ * DB.query<SomeModelClass>(
+ *     "someModelClass", orderBy(Pair("aProperty", SortOrder.ASC),
+ *                               Pair("somethingElse", SortOrder.DESC))
+ * ) {
+ *     "aProperty" eq 3
+ *     "somethingElse" lt "abcd"
+ * }
  */
 inline fun <reified T : Keyed<T>> Datastore.query(
-    kind: String, builderBlock: QueryFilterBuilder.() -> Any?
+    kind: String,
+    order: OrderBy = NoOrdering,
+    builderBlock: QueryFilterBuilder.() -> Any?
 ): Sequence<T> {
     val builder = QueryFilterBuilder()
     builder.builderBlock()
-    return this.query(kind, *(builder.build().toTypedArray()))
+    return this.query(kind, order, *(builder.build().toTypedArray()))
 }
 
 /**
@@ -248,9 +259,11 @@ inline fun <reified T : Keyed<T>> Datastore.query(
  * For technical reasons, this is implemented out of line, below.
  */
 inline fun <reified T : Keyed<T>> Datastore.keysOnlyQuery(
-    kind: String, vararg filters: QueryFilter
+    kind: String,
+    order: OrderBy = NoOrdering,
+    vararg filters: QueryFilter
 ): Sequence<Key<T>> = internalKeysOnlyQuery<T>(
-    this, kind, filters.toList(), T::class)
+    this, kind, order, filters.toList(), T::class)
 
 /**
  * Query DSL for all keys corresponding to the given filters.
@@ -258,11 +271,13 @@ inline fun <reified T : Keyed<T>> Datastore.keysOnlyQuery(
  * @see query for usage information
  */
 inline fun <reified T : Keyed<T>> Datastore.keysOnlyQuery(
-    kind: String, builderBlock: QueryFilterBuilder.() -> Any?
+    kind: String,
+    order: OrderBy = NoOrdering,
+    builderBlock: QueryFilterBuilder.() -> Any?
 ): Sequence<Key<T>> {
     val builder = QueryFilterBuilder()
     builder.builderBlock()
-    return this.keysOnlyQuery(kind, *(builder.build().toTypedArray()))
+    return this.keysOnlyQuery(kind, order, *(builder.build().toTypedArray()))
 }
 
 /**
@@ -526,6 +541,7 @@ internal fun convertDatastoreFilters(
 fun <T : Keyed<T>> internalQuery(
     datastore: Datastore,
     kind: String,
+    order: OrderBy,
     filters: List<QueryFilter>,
     tReference: KClass<T>
 ): Sequence<T> {
@@ -533,6 +549,7 @@ fun <T : Keyed<T>> internalQuery(
     val query = Query.newEntityQueryBuilder()
         .setKind(kind)
         .setFilter(filter)
+        .applyOrdering(order)
         .build()
     val result = datastore.clientOrTransaction.run(query)
     return result.asSequence()
@@ -547,6 +564,7 @@ fun <T : Keyed<T>> internalQuery(
 fun <T : Keyed<T>> internalKeysOnlyQuery(
     datastore: Datastore,
     kind: String,
+    order: OrderBy,
     filters: List<QueryFilter>,
     tReference: KClass<T>
 ): Sequence<Key<T>> {
@@ -554,6 +572,7 @@ fun <T : Keyed<T>> internalKeysOnlyQuery(
     val query = Query.newKeyQueryBuilder()
         .setKind(kind)
         .setFilter(filter)
+        .applyOrdering(order)
         .build()
     val result = datastore.clientOrTransaction.run(query)
     return result.asSequence()
