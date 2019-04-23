@@ -20,6 +20,7 @@ plugins {
 dependencies {
     compile(kotlin("stdlib-jdk8"))
     compile(kotlin("reflect"))
+    compile("com.fasterxml.jackson.module:jackson-module-kotlin:2.9.8")
 }
 
 val toplevelDescription = description

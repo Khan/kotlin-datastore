@@ -3,6 +3,7 @@
  */
 package org.khanacademy.datastore
 
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.google.cloud.Timestamp
 import com.google.cloud.datastore.BaseEntity
 import com.google.cloud.datastore.Blob
@@ -23,6 +24,7 @@ import com.google.cloud.datastore.StringValue
 import com.google.cloud.datastore.TimestampValue
 import com.google.cloud.datastore.Value
 import org.khanacademy.metadata.GeoPt
+import org.khanacademy.metadata.JsonProperty
 import org.khanacademy.metadata.Key
 import org.khanacademy.metadata.KeyID
 import org.khanacademy.metadata.KeyName
@@ -274,6 +276,15 @@ internal fun fromDatastoreType(datastoreValue: Any?, targetType: KType): Any? =
             // Note that .jvmErasure is here just a mechanism for converting
             // our KType to a KClass.
             unkeyedEntityToTypedObject(datastoreValue, targetType.jvmErasure)
+        is String -> when {
+            targetType.isJsonType() -> {
+                val innerValue = jacksonObjectMapper().readValue(
+                    datastoreValue,
+                    targetType.unwrapSinglyParameterizedType().jvmErasure.java)
+                JsonProperty(innerValue)
+            }
+            else -> datastoreValue
+        }
         else -> datastoreValue
     }
 
@@ -293,6 +304,8 @@ internal fun toDatastoreType(kotlinValue: Any?): Any? =
         is Key<*> -> kotlinValue.toDatastoreKey()
         is GeoPt -> LatLng.of(kotlinValue.latitude, kotlinValue.longitude)
         is Property -> objectToDatastoreEntity(kotlinValue)
+        is JsonProperty<*> ->
+            jacksonObjectMapper().writeValueAsString(kotlinValue.value)
         else -> kotlinValue
     }
 
@@ -350,6 +363,12 @@ private val GeoPtPropertyTypes = listOf(
     GeoPt::class.createType().withNullability(true)
 )
 
+internal fun KType.isJsonType(): Boolean =
+    arguments.isNotEmpty() && (
+        this == JsonProperty::class.createType(arguments) ||
+            this == JsonProperty::class.createType(arguments)
+            .withNullability(true))
+
 internal fun KType.isListType(): Boolean =
     arguments.isNotEmpty() && this == List::class.createType(arguments)
 
@@ -397,15 +416,12 @@ internal fun FullEntity<*>.getExistingTypedProperty(
         type == Key::class.createType(type.arguments) ||
         type == Key::class.createType(type.arguments).withNullability(true)) ->
         getKey(name)
-    // TODO(colin): location (lat/lng) properties
-    // TODO(colin): JSON properties
-    // TODO(colin): computed properties (do we need these?)
-    // TODO(colin): in general we want to support all ndb property types, see:
-    // https://cloud.google.com/appengine/docs/standard/python/ndb/entity-property-reference#properties_and_value_types
+    type.isJsonType() -> getString(name)
     EntityPropertyTypes.any { type.isSubtypeOf(it) } ->
         getEntity<IncompleteKey>(name)
     else -> throw IllegalArgumentException(
         "Unable to use property $name of type $type as a datastore property")
+    // TODO(colin): implement UserProperty
 }, type)
 
 /**

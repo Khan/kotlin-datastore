@@ -1,5 +1,7 @@
 package org.khanacademy.datastore
 
+import com.fasterxml.jackson.core.JsonParseException
+import com.fasterxml.jackson.databind.exc.InvalidFormatException
 import com.google.cloud.Timestamp
 import com.google.cloud.datastore.Blob
 import com.google.cloud.datastore.Entity
@@ -10,10 +12,12 @@ import com.google.cloud.datastore.NullValue
 import com.google.cloud.datastore.StringValue
 import com.google.cloud.datastore.TimestampValue
 import com.google.cloud.datastore.Value
+import io.kotlintest.matchers.string.shouldContain
 import io.kotlintest.shouldBe
 import io.kotlintest.shouldThrow
 import io.kotlintest.specs.StringSpec
 import org.khanacademy.metadata.GeoPt
+import org.khanacademy.metadata.JsonProperty
 import org.khanacademy.metadata.Key
 import org.khanacademy.metadata.KeyName
 import org.khanacademy.metadata.Keyed
@@ -96,6 +100,19 @@ data class RepeatedFieldStructuredPropertyModel(
     val structured: StructuredProperty<StructuredPropertyWithRepeatedField>,
     override val key: Key<RepeatedFieldStructuredPropertyModel>
 ) : Keyed<RepeatedFieldStructuredPropertyModel>
+
+data class JsonPropertyValue(
+    val innerString: String,
+    val innerInt: Int,
+
+    @com.fasterxml.jackson.annotation.JsonProperty("inner_nullable_string")
+    val innerNullableString: String?
+)
+
+data class JsonPropertyModel(
+    val json: JsonProperty<JsonPropertyValue>,
+    override val key: Key<JsonPropertyModel>
+) : Keyed<JsonPropertyModel>
 
 class EntityConversionTest : StringSpec({
     "It should correctly convert basic fields" {
@@ -517,5 +534,57 @@ class EntityConversionTest : StringSpec({
         restored.structured.value.innerProp1 shouldBe "inner_string"
         restored.structured.value.innerProp2 shouldBe
             listOf(innerDateTime1, innerDateTime2)
+    }
+
+    "It converts json to a JsonProperty" {
+        val testKey = Key<JsonPropertyModel>(
+            "JsonPropertyModel", "the-first-one")
+        val jsonValue = """{"innerString": "abcde", "innerInt": 1,""" +
+            """"inner_nullable_string": null}"""
+        val entity = Entity.newBuilder(testKey.toDatastoreKey())
+            .set("json", jsonValue)
+            .build()
+        val restored = entity.toTypedModel(JsonPropertyModel::class)
+        restored.json.value.innerString shouldBe "abcde"
+        restored.json.value.innerInt shouldBe 1
+        restored.json.value.innerNullableString shouldBe null
+    }
+
+    "It round-trips a JsonProperty" {
+        val testKey = Key<JsonPropertyModel>(
+            "JsonPropertyModel", "the-first-one")
+        val instance = JsonPropertyModel(
+            JsonProperty(JsonPropertyValue("efghi", 10, null)), testKey)
+        val entity = instance.toDatastoreEntity()
+        entity.getString("json") shouldContain "efghi"
+
+        val restored = entity.toTypedModel(JsonPropertyModel::class)
+        restored shouldBe instance
+    }
+
+    "It throws on invalid JSON" {
+        val testKey = Key<JsonPropertyModel>(
+            "JsonPropertyModel", "the-first-one")
+        val jsonValue = """{"innerString" "abcde" "innerInt" 1""" +
+            """"inner_nullable_string", null}"""
+        val entity = Entity.newBuilder(testKey.toDatastoreKey())
+            .set("json", jsonValue)
+            .build()
+        shouldThrow<JsonParseException> {
+            entity.toTypedModel(JsonPropertyModel::class)
+        }
+    }
+
+    "It throws on JSON that doesn't match the expected schema" {
+        val testKey = Key<JsonPropertyModel>(
+            "JsonPropertyModel", "the-first-one")
+        val jsonValue = """{"innerString": 3, "innerInt": "abcde",""" +
+            """"inner_nullable_string": null}"""
+        val entity = Entity.newBuilder(testKey.toDatastoreKey())
+            .set("json", jsonValue)
+            .build()
+        shouldThrow<InvalidFormatException> {
+            entity.toTypedModel(JsonPropertyModel::class)
+        }
     }
 })
