@@ -7,15 +7,16 @@ import io.kotlintest.shouldThrow
 import io.kotlintest.specs.StringSpec
 import org.khanacademy.datastore.DB
 import org.khanacademy.datastore.Datastore
+import org.khanacademy.datastore.Quadruple
 import org.khanacademy.datastore.get
 import org.khanacademy.datastore.getMulti
 import org.khanacademy.datastore.keysOnlyQuery
 import org.khanacademy.datastore.put
 import org.khanacademy.datastore.putMulti
-import org.khanacademy.datastore.Quadruple
 import org.khanacademy.datastore.query
 import org.khanacademy.datastore.toDatastoreKey
 import org.khanacademy.datastore.toKey
+import org.khanacademy.datastore.transactional
 import org.khanacademy.metadata.Key
 import org.khanacademy.metadata.KeyID
 import org.khanacademy.metadata.KeyName
@@ -496,6 +497,38 @@ class DatastoreTestStubTest : StringSpec({
             }.toList()
             result.size shouldBe 1
             result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 2)
+        }
+    }
+
+    "It should update entities in a transaction" {
+        withMockDatastore(queryFixtures) {
+            val key = Key<TestQueryKind>("TestQueryKind", 1)
+            DB.transactional {
+                val entity = DB.get(key)
+                entity shouldNotBe null
+                // unfortunately the compiler cannot infer that the above is a
+                // non-null assertion.
+                entity!!.aNullableLong shouldBe 42L
+                DB.put(entity.copy(aNullableLong = 43L))
+            }
+            DB.get(key)?.aNullableLong shouldBe 43L
+        }
+    }
+
+    "Puts in a transaction are not visible until it has committed" {
+        withMockDatastore(queryFixtures) {
+            val key = Key<TestQueryKind>("TestQueryKind", 1)
+            DB.transactional {
+                val entity = DB.get(key)
+                entity shouldNotBe null
+                // unfortunately the compiler cannot infer that the above is a
+                // non-null assertion.
+                entity!!.aNullableLong shouldBe 42L
+                DB.put(entity.copy(aNullableLong = 43L))
+
+                DB.get(key)?.aNullableLong shouldBe 42L
+            }
+            DB.get(key)?.aNullableLong shouldBe 43L
         }
     }
 })

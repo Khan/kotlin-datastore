@@ -52,6 +52,7 @@ import com.google.datastore.v1.Key.PathElement.IdTypeCase
 import com.google.datastore.v1.PropertyFilter
 import com.google.datastore.v1.TransactionOptions
 import com.google.datastore.v1.Value
+import com.google.protobuf.ByteString
 import com.google.protobuf.NullValue
 import com.google.protobuf.Timestamp
 import org.khanacademy.datastore.DatastoreBackend
@@ -419,6 +420,87 @@ private fun PropertyFilter.isInequalityFilter(): Boolean {
 }
 
 /**
+ * Mock transaction class, simulating some of the behavior of the datsatore.
+ *
+ * Note that in contrast to NDB, we have no context cache, so this implements
+ * the datastore-native behavior that if you do a get, put, get sequence on the
+ * same entity in the same transaction, you do not see the result of the put in
+ * the second get.
+ *
+ * TODO(colin): at present this will throw on queries. We should allow ancestor
+ * queries.
+ *
+ * TODO(colin): this does not currently throw on concurrent modification.
+ *
+ * TODO(colin): this does not match the prod behavior with respect to
+ * concurrent modification of different entities in the same group.
+ */
+class MockTransaction(
+    private val parent: MockDatastore
+) : ThrowingDatastore(), Transaction {
+    private var innerDatastoreForReads = MockDatastore(listOf())
+    private var innerDatastoreForWrites = MockDatastore(listOf())
+
+    // Transaction-specific methods
+
+    // We don't expose the transaction object outside the library, so just use
+    // a dummy value.
+    override fun isActive(): Boolean = true
+
+    private fun reset() {
+        innerDatastoreForReads.entities = listOf()
+        innerDatastoreForWrites.entities = listOf()
+    }
+
+    override fun rollback() {
+        reset()
+    }
+
+    override fun getDatastore(): Datastore = parent
+
+    override fun commit(): Transaction.Response {
+        parent.put(*innerDatastoreForWrites.entities.toTypedArray())
+        reset()
+        return Transaction.Response { listOf() }
+    }
+
+    override fun getTransactionId(): ByteString {
+        throw NotImplementedError("Not supported in the test stub.")
+    }
+
+    override fun putWithDeferredIdAllocation(vararg entities: FullEntity<*>?) {
+        throw NotImplementedError("Not supported in the test stub.")
+    }
+
+    override fun addWithDeferredIdAllocation(vararg entities: FullEntity<*>?) {
+        throw NotImplementedError("Not supported in the test stub.")
+    }
+
+    // Selected Datastore methods
+    override fun get(key: Key?): Entity? {
+        val inner = innerDatastoreForReads.get(key)
+        if (inner == null) {
+            val fromParent = parent.get(key)
+            if (fromParent != null) {
+                innerDatastoreForReads.put(fromParent)
+            }
+        }
+        return innerDatastoreForReads.get(key)
+    }
+
+    override fun get(vararg keys: Key?): MutableIterator<Entity> {
+        return keys.mapNotNull { key -> this.get(key) }
+            .toMutableList().listIterator()
+    }
+
+    override fun put(entity: FullEntity<*>?): Entity =
+        innerDatastoreForWrites.put(entity)
+
+    override fun put(vararg entities: FullEntity<*>?): MutableList<Entity> =
+        innerDatastoreForWrites.put(*entities)
+}
+
+/**
  * Datastore implementation that uses a list of entities as its fake contents.
  *
  * TODO(colin): this doesn't support the full set of datastore operations yet.
@@ -428,24 +510,28 @@ private fun PropertyFilter.isInequalityFilter(): Boolean {
  * TODO(colin): we'll want to do some synchronization around updating the
  * internal state.
  */
-class MockDatastore(private var entities: List<Entity>) : ThrowingDatastore() {
+class MockDatastore(
+    internal var entities: List<Entity>
+) : ThrowingDatastore() {
     override fun get(key: Key?): Entity? =
         entities.firstOrNull { it.key == key }
 
     override fun get(vararg keys: Key?): MutableIterator<Entity> {
-        return keys.mapNotNull { key -> entities.firstOrNull { it.key == key } }
-            .iterator() as MutableIterator<Entity>
+        return keys.mapNotNull { key -> this.get(key) }
+            .toMutableList().listIterator()
     }
 
     override fun put(entity: FullEntity<*>?): Entity {
         val entityConverted = entity as Entity
-        entities += entityConverted
+        entities = entities.filter { it.key != entity.key } + entityConverted
         return entityConverted
     }
 
     override fun put(vararg entities: FullEntity<*>?): MutableList<Entity> {
         val entitiesConverted = entities.map { it as Entity }
-        this.entities += entitiesConverted
+        val keys = entitiesConverted.map { it.key }
+        this.entities = this.entities.filter { it.key !in keys } +
+            entitiesConverted
         return entitiesConverted.toMutableList()
     }
 
@@ -550,6 +636,8 @@ class MockDatastore(private var entities: List<Entity>) : ThrowingDatastore() {
                     "Only entity and key queries are supported.")
         } as QueryResults<T>
     }
+
+    override fun newTransaction(): Transaction = MockTransaction(this)
 
     companion object {
         class MockQueryResults<T>(
