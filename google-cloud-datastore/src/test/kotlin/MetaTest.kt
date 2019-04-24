@@ -5,9 +5,12 @@ import com.google.cloud.datastore.StringValue
 import io.kotlintest.shouldBe
 import io.kotlintest.shouldThrow
 import io.kotlintest.specs.StringSpec
+import kotlinx.coroutines.runBlocking
+import org.khanacademy.datastore.testutil.withMockDatastore
 import org.khanacademy.metadata.Key
 import org.khanacademy.metadata.Keyed
 import org.khanacademy.metadata.Meta
+import org.khanacademy.metadata.Readonly
 
 data class AnnotationTestModel(
     @Meta(name = "a_string")
@@ -34,6 +37,12 @@ data class IndexedAnnotationTestModel(
     val anUnspecifiedPropertyDefaultingFalse: String,
     override val key: Key<IndexedAnnotationTestModel>
 ) : Keyed<IndexedAnnotationTestModel>
+
+@Readonly
+data class ReadonlyTestModel(
+    val aString: String,
+    override val key: Key<ReadonlyTestModel>
+) : Keyed<ReadonlyTestModel>
 
 class ModelAnnotationTest : StringSpec({
     "When converting from an Entity, it should use the annotated name" {
@@ -102,5 +111,29 @@ class ModelAnnotationTest : StringSpec({
         entity.getValue<StringValue>(
             "anUnspecifiedPropertyDefaultingFalse")
             .excludeFromIndexes() shouldBe true
+    }
+
+    "It should throw when attempting to put a @Readonly model" {
+        val key = Key<ReadonlyTestModel>("ReadonlyTestModel", "the-first-one")
+        val model = ReadonlyTestModel(aString = "abcd", key = key)
+        withMockDatastore(listOf()) {
+            shouldThrow<ReadonlyModelException> {
+                DB.put(model)
+            }
+            shouldThrow<ReadonlyModelException> {
+                DB.putMulti(model, model)
+            }
+            shouldThrow<ReadonlyModelException> {
+                DB.putMulti(model, model, model)
+            }
+            shouldThrow<ReadonlyModelException> {
+                DB.putMulti(model, model, model, model)
+            }
+            shouldThrow<ReadonlyModelException> {
+                runBlocking {
+                    DB.putAsync(model).await()
+                }
+            }
+        }
     }
 })

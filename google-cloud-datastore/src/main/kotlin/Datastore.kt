@@ -10,6 +10,7 @@ import com.google.cloud.datastore.Entity
 import com.google.cloud.datastore.Query
 import com.google.cloud.datastore.StructuredQuery
 import com.google.cloud.datastore.Transaction
+import kotlin.reflect.full.findAnnotation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +19,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.khanacademy.metadata.Key
 import org.khanacademy.metadata.Keyed
+import org.khanacademy.metadata.Readonly
 import kotlin.coroutines.CoroutineContext
 import kotlin.reflect.KClass
 
@@ -110,10 +112,28 @@ inline fun <
         D::class)
 
 /**
+ * Exception thrown when we try to put a read-only model.
+ */
+class ReadonlyModelException(msg: String) : Exception(msg)
+
+/**
+ * Throw if the model instance's class is annotated @Readonly.
+ */
+internal fun <T : Keyed<T>> throwIfReadonly(instance: Keyed<T>) {
+    if (instance::class.findAnnotation<Readonly>() != null) {
+        throw ReadonlyModelException(
+            "Cannot put() an instance of ${instance::class.simpleName}")
+    }
+}
+
+/**
  * Synchronous put of an object to the datastore.
  */
-fun <T : Keyed<T>> Datastore.put(modelInstance: Keyed<T>): Key<T> =
-    this.clientOrTransaction.put(modelInstance.toDatastoreEntity()).key.toKey()
+fun <T : Keyed<T>> Datastore.put(modelInstance: Keyed<T>): Key<T> {
+    throwIfReadonly(modelInstance)
+    return this.clientOrTransaction.put(modelInstance.toDatastoreEntity())
+        .key.toKey()
+}
 
 /**
  * Synchronous put of multiple objects to the datastore.
@@ -121,6 +141,8 @@ fun <T : Keyed<T>> Datastore.put(modelInstance: Keyed<T>): Key<T> =
 fun <A : Keyed<A>, B : Keyed<B>> Datastore.putMulti(
     a: A, b: B
 ): Pair<Key<A>, Key<B>> {
+    throwIfReadonly(a)
+    throwIfReadonly(b)
     val entities = this.clientOrTransaction.put(a.toDatastoreEntity(),
         b.toDatastoreEntity())
     return Pair(entities[0].key.toKey(), entities[1].key.toKey())
@@ -129,6 +151,9 @@ fun <A : Keyed<A>, B : Keyed<B>> Datastore.putMulti(
 fun <A : Keyed<A>, B : Keyed<B>, C : Keyed<C>> Datastore.putMulti(
     a: A, b: B, c: C
 ): Triple<Key<A>, Key<B>, Key<C>> {
+    throwIfReadonly(a)
+    throwIfReadonly(b)
+    throwIfReadonly(c)
     val entities = this.clientOrTransaction.put(a.toDatastoreEntity(),
         b.toDatastoreEntity(), c.toDatastoreEntity())
     return Triple(entities[0].key.toKey(), entities[1].key.toKey(),
@@ -138,6 +163,10 @@ fun <A : Keyed<A>, B : Keyed<B>, C : Keyed<C>> Datastore.putMulti(
 fun <A : Keyed<A>, B : Keyed<B>, C : Keyed<C>, D : Keyed<D>> Datastore.putMulti(
     a: A, b: B, c: C, d: D
 ): Quadruple<Key<A>, Key<B>, Key<C>, Key<D>> {
+    throwIfReadonly(a)
+    throwIfReadonly(b)
+    throwIfReadonly(c)
+    throwIfReadonly(d)
     val entities = this.clientOrTransaction.put(a.toDatastoreEntity(),
         b.toDatastoreEntity(), c.toDatastoreEntity(), d.toDatastoreEntity())
     return Quadruple(entities[0].key.toKey(), entities[1].key.toKey(),
