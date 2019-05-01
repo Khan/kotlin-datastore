@@ -23,7 +23,9 @@ independent artifacts):
 
 # Status
 
-This is in very early stages, and only a limited set of functionality is implemented.
+This is currently mostly feature complete and is being used in production,
+but we're still numbering releases as pre-1.0 for now to allow some greater
+flexibility for iterating on the public API as we start to use it more.
 
 Functionality planned prior to a first release:
 
@@ -32,7 +34,7 @@ Functionality planned prior to a first release:
 - [x] Asynchronous operation (via kotlin coroutines)
 - [x] Datastore queries (via a `Map`-like interface)
 - [x] Datastore writes
-- [ ] multi-get and -put
+- [x] multi-get and -put
 - [x] Use of plain kotlin data classes to represent datstore models
 - [x] Reflective implementation of converting Google datastore client `Entity`s to data class instances
 - [x] Reflective implementation of converting data class instances to Google datastore client `Entity`s
@@ -43,10 +45,10 @@ Functionality planned prior to a first release:
 - [x] Nested entity properties
 - [x] Timestamp properties
 - [x] Key properties
-- [ ] Location properties
-- [ ] Json properties
+- [x] Location properties
+- [x] Json properties
 - [x] Computed properties
-- [ ] Other miscellaneous property types (in general we plan to support equivalents of the
+- [x] Other miscellaneous property types (in general we plan to support equivalents of the
       standard ndb property types at
       https://cloud.google.com/appengine/docs/standard/python/ndb/entity-property-reference#properties_and_value_types)
 - [x] Backend using the google-cloud-java datastore client
