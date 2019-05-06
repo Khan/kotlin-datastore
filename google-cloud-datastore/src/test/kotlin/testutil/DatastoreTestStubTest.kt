@@ -614,4 +614,17 @@ class DatastoreTestStubTest : StringSpec({
             result[0].key shouldBe Key<TestQueryKind>("TestQueryKind", 4)
         }
     }
+
+    "It allows queries with no filters" {
+        withMockDatastore(queryFixtures) {
+            val result = DB.query<TestQueryKind>("TestQueryKind").toList()
+            result.size shouldBe 4
+            result.map { it.key } shouldBe listOf(
+                Key<TestQueryKind>("TestQueryKind", 1),
+                Key<TestQueryKind>("TestQueryKind", 2),
+                Key<TestQueryKind>("TestQueryKind", 3),
+                Key<TestQueryKind>("TestQueryKind", 4)
+            )
+        }
+    }
 })

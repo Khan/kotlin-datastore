@@ -700,14 +700,16 @@ class MockDatastore(
         val structuredQuery = query as? StructuredQuery<*>
             ?: throw NotImplementedError(
                 "Only structured queries are implemented in the test stub.")
-        val filter = DatastoreTypeConverter.filterToPb(structuredQuery.filter)
+        val filter = structuredQuery.filter?.let(
+            DatastoreTypeConverter::filterToPb)
         // TODO(colin): this only handles a top-level composite filter, which
         // is all our query code will currently generate. But probably better
         // to enforce this somehow?
-        val allFilters = if (filter.hasCompositeFilter()) {
-            filter.compositeFilter.filtersList.map { it.propertyFilter }
-        } else {
-            listOf(filter.propertyFilter)
+        val allFilters = when {
+            filter == null -> listOf()
+            filter.hasCompositeFilter() ->
+                filter.compositeFilter.filtersList.map { it.propertyFilter }
+            else -> listOf(filter.propertyFilter)
         }
 
         // Most of the time, an entity passes a list of filters if it

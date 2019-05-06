@@ -544,17 +544,15 @@ fun <T : Keyed<T>> internalQuery(
     order: OrderBy,
     filters: List<QueryFilter>,
     tReference: KClass<T>
-): Sequence<T> {
-    val filter = convertDatastoreFilters(filters, tReference)
-    val query = Query.newEntityQueryBuilder()
-        .setKind(kind)
-        .setFilter(filter)
-        .applyOrdering(order)
-        .build()
-    val result = datastore.clientOrTransaction.run(query)
-    return result.asSequence()
-        .map { entity -> entity.toTypedModel(tReference) }
-}
+): Sequence<T> = configureAndRunQuery(
+    Query.newEntityQueryBuilder(),
+    datastore,
+    kind,
+    order,
+    filters,
+    tReference
+)
+    .map { entity -> entity.toTypedModel(tReference) }
 
 /**
  * Internal Datastore.keysOnlyQuery used as an inlining target
@@ -567,14 +565,33 @@ fun <T : Keyed<T>> internalKeysOnlyQuery(
     order: OrderBy,
     filters: List<QueryFilter>,
     tReference: KClass<T>
-): Sequence<Key<T>> {
-    val filter = convertDatastoreFilters(filters, tReference)
-    val query = Query.newKeyQueryBuilder()
+): Sequence<Key<T>> = configureAndRunQuery(
+    Query.newKeyQueryBuilder(),
+    datastore,
+    kind,
+    order,
+    filters,
+    tReference
+)
+    .map { key -> key.toKey<T>() }
+
+/**
+ * Common code for runnning both keys-only and entity queries.
+ */
+internal fun <T : Any, Q> configureAndRunQuery(
+    inputBuilder: StructuredQuery.Builder<Q>,
+    datastore: Datastore,
+    kind: String,
+    order: OrderBy,
+    filters: List<QueryFilter>,
+    tReference: KClass<T>
+): Sequence<Q> {
+    var builder = inputBuilder
         .setKind(kind)
-        .setFilter(filter)
         .applyOrdering(order)
-        .build()
-    val result = datastore.clientOrTransaction.run(query)
-    return result.asSequence()
-        .map { key -> key.toKey<T>() }
+    if (filters.isNotEmpty()) {
+        val filter = convertDatastoreFilters(filters, tReference)
+        builder = builder.setFilter(filter)
+    }
+    return datastore.clientOrTransaction.run(builder.build()).asSequence()
 }
