@@ -14,6 +14,7 @@ import io.kotlintest.matchers.types.shouldBeInstanceOf
 import io.kotlintest.shouldBe
 import io.kotlintest.shouldThrow
 import io.kotlintest.specs.StringSpec
+import org.khanacademy.metadata.CustomSerializationProperty
 import org.khanacademy.metadata.GeoPt
 import org.khanacademy.metadata.JsonProperty
 import org.khanacademy.metadata.Key
@@ -92,6 +93,38 @@ data class JsonPropertyModel(
     val json: JsonProperty<JsonPropertyValue>,
     override val key: Key<JsonPropertyModel>
 ) : Keyed<JsonPropertyModel>
+
+class Shift1Property() : CustomSerializationProperty<ByteArray, String> {
+    private lateinit var value: String
+
+    override fun getKotlinValue(): String = value
+
+    override fun setKotlinValue(value: String) {
+        this.value = value
+    }
+
+    override fun fromDatastoreValue(datastoreValue: ByteArray): String =
+        String(datastoreValue)
+            .map { it.toInt() - 1 }
+            .map { it.toChar() }
+            .joinToString("")
+
+    override fun toDatastoreValue(kotlinValue: String): ByteArray =
+        kotlinValue
+            .map { it.toInt() + 1 }
+            .map { it.toChar() }
+            .joinToString("")
+            .toByteArray()
+
+    constructor(value: String) : this() {
+        this.value = value
+    }
+}
+
+data class CustomSerializationModel(
+    val custom: Shift1Property,
+    override val key: Key<CustomSerializationModel>
+) : Keyed<CustomSerializationModel>
 
 class EntityConversionTest : StringSpec({
     "It should correctly convert basic fields" {
@@ -464,5 +497,18 @@ class EntityConversionTest : StringSpec({
         shouldThrow<PropertyAccessException> {
             entity.toTypedModel(JsonPropertyModel::class)
         }
+    }
+
+    "It does custom serialization for custom properties" {
+        val testKey = Key<CustomSerializationModel>(
+            "CustomSerializationModel", "the-first-one")
+        val model = CustomSerializationModel(
+            custom = Shift1Property("abcde"),
+            key = testKey
+        )
+        val entity = model.toDatastoreEntity()
+        String(entity.getBlob("custom").toByteArray()) shouldBe "bcdef"
+        val restored = entity.toTypedModel(CustomSerializationModel::class)
+        restored.custom.getKotlinValue() shouldBe "abcde"
     }
 })

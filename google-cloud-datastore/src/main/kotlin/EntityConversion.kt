@@ -23,6 +23,7 @@ import com.google.cloud.datastore.NullValue
 import com.google.cloud.datastore.StringValue
 import com.google.cloud.datastore.TimestampValue
 import com.google.cloud.datastore.Value
+import org.khanacademy.metadata.CustomSerializationProperty
 import org.khanacademy.metadata.GeoPt
 import org.khanacademy.metadata.JsonProperty
 import org.khanacademy.metadata.Key
@@ -48,6 +49,7 @@ import kotlin.reflect.KType
 import kotlin.reflect.full.createType
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.full.findAnnotation
+import kotlin.reflect.full.isSubclassOf
 import kotlin.reflect.full.isSubtypeOf
 import kotlin.reflect.full.primaryConstructor
 import kotlin.reflect.full.valueParameters
@@ -277,20 +279,43 @@ internal fun convertKeyUntyped(datastoreKey: DatastoreKey): Key<*>? {
  * Convert a value from the type the datastore client uses to our version.
  */
 internal fun fromDatastoreType(datastoreValue: Any?, targetType: KType): Any? =
-    when (datastoreValue) {
-        is Blob -> datastoreValue.toByteArray()
-        is Timestamp -> when (targetType) {
+    when {
+        targetType.isCustomSerializationPropertyType() -> {
+            val innerTargetType = targetType.jvmErasure
+                .members
+                .first { it.name == "toDatastoreValue" }
+                .returnType
+            val convertedBaseValue = fromDatastoreType(
+                datastoreValue, innerTargetType)
+            val property = targetType.jvmErasure.primaryConstructor?.call()
+                ?: throw IllegalArgumentException(
+                    "Custom properties must provide a 0-argument primary " +
+                        "constructor")
+            val converted = property::class.members
+                .first { it.name == "fromDatastoreValue" }
+                .call(property, convertedBaseValue)
+
+            property::class.members
+                .first { it.name == "setKotlinValue" }
+                .call(property, converted)
+
+            property
+        }
+        datastoreValue is Blob -> datastoreValue.toByteArray()
+        datastoreValue is Timestamp -> when (targetType) {
             in DateTypes -> convertTimestamp(datastoreValue).toLocalDate()
             in TimeTypes -> convertTimestamp(datastoreValue).toLocalTime()
             else -> convertTimestamp(datastoreValue)
         }
-        is com.google.cloud.datastore.Key -> convertKeyUntyped(datastoreValue)
-        is LatLng -> GeoPt(datastoreValue.latitude, datastoreValue.longitude)
-        is FullEntity<*> ->
+        datastoreValue is com.google.cloud.datastore.Key ->
+            convertKeyUntyped(datastoreValue)
+        datastoreValue is LatLng ->
+            GeoPt(datastoreValue.latitude, datastoreValue.longitude)
+        datastoreValue is FullEntity<*> ->
             // Note that .jvmErasure is here just a mechanism for converting
             // our KType to a KClass.
             unkeyedEntityToTypedObject(datastoreValue, targetType.jvmErasure)
-        is String -> when {
+        datastoreValue is String -> when {
             targetType.isJsonType() -> {
                 val innerValue = jacksonObjectMapper().readValue(
                     datastoreValue,
@@ -317,6 +342,9 @@ internal fun toDatastoreType(kotlinValue: Any?): Any? =
         ))
         is Key<*> -> kotlinValue.toDatastoreKey()
         is GeoPt -> LatLng.of(kotlinValue.latitude, kotlinValue.longitude)
+        is CustomSerializationProperty<*, *> -> toDatastoreType(
+            kotlinValue::class.members.first { it.name == "toDatastoreValue" }
+                .call(kotlinValue, kotlinValue.getKotlinValue()))
         is Property -> objectToDatastoreEntity(kotlinValue)
         is JsonProperty<*> ->
             jacksonObjectMapper().writeValueAsString(kotlinValue.value)
@@ -377,14 +405,17 @@ private val GeoPtPropertyTypes = listOf(
     GeoPt::class.createType().withNullability(true)
 )
 
+internal fun KType.isCustomSerializationPropertyType(): Boolean =
+    this.jvmErasure.isSubclassOf(CustomSerializationProperty::class)
+
 internal fun KType.isJsonType(): Boolean =
-    arguments.isNotEmpty() && (
+    arguments.size == 1 && (
         this == JsonProperty::class.createType(arguments) ||
             this == JsonProperty::class.createType(arguments)
             .withNullability(true))
 
 internal fun KType.isListType(): Boolean =
-    arguments.isNotEmpty() && this == List::class.createType(arguments)
+    arguments.size == 1 && this == List::class.createType(arguments)
 
 internal fun KType.unwrapSinglyParameterizedType(): KType =
     arguments[0].type ?: throw IllegalArgumentException(
@@ -431,6 +462,15 @@ internal fun FullEntity<*>.getExistingTypedProperty(
         type == Key::class.createType(type.arguments).withNullability(true)) ->
         getKey(name)
     type.isJsonType() -> getString(name)
+    type.isCustomSerializationPropertyType() -> {
+        val innerType = type.jvmErasure
+            .members
+            .first { it.name == "toDatastoreValue" }
+            .returnType
+        // Return a value of the type to which this property serializes; then,
+        // in fromDatastoreType, we'll convert it to the target type.
+        getExistingTypedProperty(name, innerType)
+    }
     EntityPropertyTypes.any { type.isSubtypeOf(it) } ->
         getEntity<IncompleteKey>(name)
     else -> throw IllegalArgumentException(
