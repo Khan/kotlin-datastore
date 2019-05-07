@@ -341,7 +341,7 @@ class StructuredPropertyTest : StringSpec({
             key = testKey
         )
 
-        shouldThrow<IllegalArgumentException> {
+        shouldThrow<PropertyAccessException> {
             instance
                 .toDatastoreEntity()
                 .toTypedModel(InvalidStructuredPropertyModel::class)
@@ -382,7 +382,7 @@ class StructuredPropertyTest : StringSpec({
             key = testKey
         )
 
-        shouldThrow<IllegalArgumentException> {
+        shouldThrow<PropertyAccessException> {
             instance
                 .toDatastoreEntity()
                 .toTypedModel(InvalidDoublyRepeatedModel::class)

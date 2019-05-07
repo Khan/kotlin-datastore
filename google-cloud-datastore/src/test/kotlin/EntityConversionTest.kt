@@ -1,7 +1,5 @@
 package org.khanacademy.datastore
 
-import com.fasterxml.jackson.core.JsonParseException
-import com.fasterxml.jackson.databind.exc.InvalidFormatException
 import com.google.cloud.Timestamp
 import com.google.cloud.datastore.Blob
 import com.google.cloud.datastore.Entity
@@ -12,6 +10,7 @@ import com.google.cloud.datastore.NullValue
 import com.google.cloud.datastore.StringValue
 import com.google.cloud.datastore.Value
 import io.kotlintest.matchers.string.shouldContain
+import io.kotlintest.matchers.types.shouldBeInstanceOf
 import io.kotlintest.shouldBe
 import io.kotlintest.shouldThrow
 import io.kotlintest.specs.StringSpec
@@ -142,9 +141,10 @@ class EntityConversionTest : StringSpec({
             .set("aDouble", 2.71828)
             .set("someBytes", Blob.copyFrom("abcdefg".toByteArray()))
             .build()
-        shouldThrow<ClassCastException> {
+        val e = shouldThrow<PropertyAccessException> {
             entity.toTypedModel(PrimitiveTestModel::class)
         }
+        e.cause.shouldBeInstanceOf<ClassCastException>()
     }
 
     "It should throw if the entity has an unexpected null" {
@@ -157,7 +157,7 @@ class EntityConversionTest : StringSpec({
             .set("aDouble", 2.71828)
             .set("nonNullableBytes", NullValue())
             .build()
-        shouldThrow<NullPointerException> {
+        shouldThrow<PropertyAccessException> {
             entity.toTypedModel(PrimitiveTestModel::class)
         }
     }
@@ -448,7 +448,7 @@ class EntityConversionTest : StringSpec({
         val entity = Entity.newBuilder(testKey.toDatastoreKey())
             .set("json", jsonValue)
             .build()
-        shouldThrow<JsonParseException> {
+        shouldThrow<PropertyAccessException> {
             entity.toTypedModel(JsonPropertyModel::class)
         }
     }
@@ -461,7 +461,7 @@ class EntityConversionTest : StringSpec({
         val entity = Entity.newBuilder(testKey.toDatastoreKey())
             .set("json", jsonValue)
             .build()
-        shouldThrow<InvalidFormatException> {
+        shouldThrow<PropertyAccessException> {
             entity.toTypedModel(JsonPropertyModel::class)
         }
     }

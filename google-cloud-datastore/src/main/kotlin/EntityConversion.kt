@@ -189,26 +189,40 @@ internal fun checkNullability(
 }
 
 /**
+ * Exception thrown when there was an error reading a property.
+ *
+ * This is never thrown directly, but will wrap a more specific error type
+ * giving more detail about what went wrong.
+ */
+class PropertyAccessException(
+    propertyName: String, cause: Throwable
+) : IllegalStateException("Error reading property $propertyName", cause)
+
+/**
  * Get a single property off an entity, converting to the given type.
  */
 internal fun FullEntity<*>.getTypedProperty(
     name: String, type: KType
-): Any? = checkNullability(
-    key?.kind,
-    name,
-    type,
-    if (name in this ||
-        // ndb-style StructuredProperties do some weird property renaming, so
-        // their names should never be on the entity. They do their own
-        // handling of absence, and we treat them as if they're always present.
-        type.isStructuredPropertyType() ||
-        type.isStructuredPropertyListType()) {
+): Any? = try {
+    checkNullability(
+        key?.kind,
+        name,
+        type,
+        if (name in this ||
+            // ndb-style StructuredProperties do some weird property renaming, so
+            // their names should never be on the entity. They do their own
+            // handling of absence, and we treat them as if they're always present.
+            type.isStructuredPropertyType() ||
+            type.isStructuredPropertyListType()) {
 
-        getExistingTypedProperty(name, type)
-    } else {
-        PROPERTY_NOT_PRESENT
-    }
-)
+            getExistingTypedProperty(name, type)
+        } else {
+            PROPERTY_NOT_PRESENT
+        }
+    )
+} catch (e: Exception) {
+    throw PropertyAccessException(name, e)
+}
 
 /**
  * Convert a datastore timestamp type to a java-native LocalDateTime.
