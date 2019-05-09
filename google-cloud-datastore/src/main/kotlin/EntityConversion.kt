@@ -291,13 +291,9 @@ internal fun fromDatastoreType(datastoreValue: Any?, targetType: KType): Any? =
                 ?: throw IllegalArgumentException(
                     "Custom properties must provide a 0-argument primary " +
                         "constructor")
-            val converted = property::class.members
-                .first { it.name == "fromDatastoreValue" }
-                .call(property, convertedBaseValue)
-
             property::class.members
-                .first { it.name == "setKotlinValue" }
-                .call(property, converted)
+                .first { it.name == "setFromDatastoreValue" }
+                .call(property, convertedBaseValue)
 
             property
         }
@@ -342,9 +338,8 @@ internal fun toDatastoreType(kotlinValue: Any?): Any? =
         ))
         is Key<*> -> kotlinValue.toDatastoreKey()
         is GeoPt -> LatLng.of(kotlinValue.latitude, kotlinValue.longitude)
-        is CustomSerializationProperty<*, *> -> toDatastoreType(
-            kotlinValue::class.members.first { it.name == "toDatastoreValue" }
-                .call(kotlinValue, kotlinValue.getKotlinValue()))
+        is CustomSerializationProperty<*> -> toDatastoreType(
+            kotlinValue.toDatastoreValue())
         is Property -> objectToDatastoreEntity(kotlinValue)
         is JsonProperty<*> ->
             jacksonObjectMapper().writeValueAsString(kotlinValue.value)

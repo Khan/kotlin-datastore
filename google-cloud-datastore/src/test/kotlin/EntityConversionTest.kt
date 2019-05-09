@@ -94,23 +94,18 @@ data class JsonPropertyModel(
     override val key: Key<JsonPropertyModel>
 ) : Keyed<JsonPropertyModel>
 
-class Shift1Property() : CustomSerializationProperty<ByteArray, String> {
-    private lateinit var value: String
+class Shift1Property() : CustomSerializationProperty<ByteArray> {
+    internal lateinit var value: String
 
-    override fun getKotlinValue(): String = value
-
-    override fun setKotlinValue(value: String) {
-        this.value = value
-    }
-
-    override fun fromDatastoreValue(datastoreValue: ByteArray): String =
-        String(datastoreValue)
+    override fun setFromDatastoreValue(datastoreValue: ByteArray) {
+        this.value = String(datastoreValue)
             .map { it.toInt() - 1 }
             .map { it.toChar() }
             .joinToString("")
+    }
 
-    override fun toDatastoreValue(kotlinValue: String): ByteArray =
-        kotlinValue
+    override fun toDatastoreValue(): ByteArray =
+        this.value
             .map { it.toInt() + 1 }
             .map { it.toChar() }
             .joinToString("")
@@ -509,6 +504,17 @@ class EntityConversionTest : StringSpec({
         val entity = model.toDatastoreEntity()
         String(entity.getBlob("custom").toByteArray()) shouldBe "bcdef"
         val restored = entity.toTypedModel(CustomSerializationModel::class)
-        restored.custom.getKotlinValue() shouldBe "abcde"
+        restored.custom.value shouldBe "abcde"
+    }
+
+    "It throws if a custom property without a default is not on an entity" {
+        val testKey = Key<CustomSerializationModel>(
+            "CustomSerializationModel", "the-first-one")
+        val entity = Entity.newBuilder(testKey.toDatastoreKey())
+            .build()
+
+        shouldThrow<IllegalArgumentException> {
+            entity.toTypedModel(CustomSerializationModel::class)
+        }
     }
 })
