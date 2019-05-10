@@ -513,7 +513,6 @@ internal fun propertyValueToDatastoreValue(
         .setExcludeFromIndexes(!indexed)
         .build()
     is List<*> -> ListValue.newBuilder()
-        .setExcludeFromIndexes(!indexed)
         .set(datastoreValue.map {
             propertyValueToDatastoreValue(name, it, indexed)
         })
