@@ -167,6 +167,7 @@ def do_release(version: str, auditors: str, dry_run: bool):
     next_version += '-pre1'
     set_version(next_version, dry_run)
     commit_version_bump(next_version, auditors, dry_run)
+    git_push(dry_run)
 
 
 def main():
