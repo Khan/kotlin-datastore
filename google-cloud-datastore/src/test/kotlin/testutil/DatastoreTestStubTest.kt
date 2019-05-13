@@ -45,6 +45,14 @@ data class TestAncestorQueryKind(
     val aString: String
 ) : Keyed<TestAncestorQueryKind>
 
+/**
+ * Wrapper update to verify transaction context is propagated.
+ */
+fun wrappedUpdate(key: Key<TestQueryKind>) {
+    val entity = DB.get(key)
+    DB.put(entity!!.copy(aNullableLong = 99L))
+}
+
 class DatastoreTestStubTest : StringSpec({
     "It should by default throw on any datastore access" {
         Datastore(ThrowingDatastore())
@@ -514,6 +522,24 @@ class DatastoreTestStubTest : StringSpec({
                 DB.put(entity.copy(aNullableLong = 43L))
             }
             DB.get(key)?.aNullableLong shouldBe 43L
+        }
+    }
+
+    "It should update entities in a transaction across function boundaries" {
+        val key = Key<TestQueryKind>("TestQueryKind", 1)
+
+        withMockDatastore(queryFixtures) {
+            DB.get(key)?.aNullableLong shouldBe 42L
+            DB.transactional {
+                wrappedUpdate(key)
+            }
+            DB.get(key)?.aNullableLong shouldBe 99L
+        }
+
+        // Ensure that if wrappedUpdate() got a non-mock datastore, we'd have
+        // thrown.
+        shouldThrow<NotImplementedError> {
+            DB.get(key)
         }
     }
 

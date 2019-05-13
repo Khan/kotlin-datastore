@@ -31,6 +31,16 @@ fun makeMockDatastore(): com.google.cloud.datastore.Datastore = mock {
     on { newTransaction() } doAnswer { mock() }
 }
 
+/**
+ * Simple wrapper function around DB.get to check context propagation.
+ *
+ * (We need to ensure that transaction context is visible not just within a
+ * DB.transactional{} block but also in nested functions.)
+ */
+fun wrappedDBGet(key: Key<TestModel>): TestModel? {
+    return DB.get(key)
+}
+
 class DBTest : StringSpec({
     val testModel1 = TestModel(Key(
         parentPath = listOf(),
@@ -241,6 +251,20 @@ class DBTest : StringSpec({
             }
         }
         runBlocking { deferredTxnResult.await() } shouldBe true
+    }
+
+    "It should correctly use a transaction even when in a function call" {
+        val testDatastore = makeMockDatastore()
+        Datastore(testDatastore)
+        lateinit var testTransaction: Transaction
+        DB.transactional {
+            wrappedDBGet(testModel3.key)
+            wrappedDBGet(testModel2.key)
+            testTransaction = clientOrTransaction as Transaction
+        }
+        verify(testTransaction).get(testModel3.key.toDatastoreKey())
+        verify(testTransaction).get(testModel2.key.toDatastoreKey())
+        verify(testTransaction, never()).get(testModel1.key.toDatastoreKey())
     }
 
     "It correctly uses property renaming for queries" {
