@@ -653,4 +653,32 @@ class DatastoreTestStubTest : StringSpec({
             )
         }
     }
+
+    "It throws on non-ancestor queries in transactions" {
+        withMockDatastore(queryFixtures) {
+            shouldThrow<IllegalArgumentException> {
+                DB.transactional {
+                    DB.query<TestQueryKind>("TestQueryKind") {
+                        "aString" ge "a"
+                    }
+                }
+            }
+        }
+    }
+
+    "It evaluates ancestor queries in transactions" {
+        withMockDatastore(queryFixtures) {
+            DB.transactional {
+                val result = DB.query<TestAncestorQueryKind>(
+                    "TestAncestorQueryKind"
+                ) {
+                    hasAncestor(Key<TestKind>("TestKind", 2))
+                    "aString" eq "a"
+                }.toList()
+                result.size shouldBe 1
+                result[0].key.kind shouldBe "TestAncestorQueryKind"
+                result[0].key.idOrName shouldBe KeyID(6L)
+            }
+        }
+    }
 })

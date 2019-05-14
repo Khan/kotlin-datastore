@@ -429,6 +429,20 @@ private fun PropertyFilter.isInequalityFilter(): Boolean {
     }
 }
 
+private fun allQueryFilters(query: StructuredQuery<*>): List<PropertyFilter> {
+    val filter = query.filter?.let(
+        DatastoreTypeConverter::filterToPb)
+    // TODO(colin): this only handles a top-level composite filter, which
+    // is all our query code will currently generate. But probably better
+    // to enforce this somehow?
+    return when {
+        filter == null -> listOf()
+        filter.hasCompositeFilter() ->
+            filter.compositeFilter.filtersList.map { it.propertyFilter }
+        else -> listOf(filter.propertyFilter)
+    }
+}
+
 /**
  * Mock transaction class, simulating some of the behavior of the datsatore.
  *
@@ -508,6 +522,20 @@ class MockTransaction(
 
     override fun put(vararg entities: FullEntity<*>?): MutableList<Entity> =
         innerDatastoreForWrites.put(*entities)
+
+    override fun <T> run(query: Query<T>?): QueryResults<T> {
+        val structuredQuery = query as? StructuredQuery<*>
+            ?: throw NotImplementedError(
+                "Only structured queries are implemented in the test stub.")
+        val hasAncestor = allQueryFilters(structuredQuery).any { filter ->
+            filter.opValue == PropertyFilter.Operator.HAS_ANCESTOR_VALUE
+        }
+        if (!hasAncestor) {
+            throw IllegalArgumentException(
+                "Only ancestor queries are permitted in transactions.")
+        }
+        return parent.run(query)
+    }
 }
 
 /**
@@ -700,17 +728,7 @@ class MockDatastore(
         val structuredQuery = query as? StructuredQuery<*>
             ?: throw NotImplementedError(
                 "Only structured queries are implemented in the test stub.")
-        val filter = structuredQuery.filter?.let(
-            DatastoreTypeConverter::filterToPb)
-        // TODO(colin): this only handles a top-level composite filter, which
-        // is all our query code will currently generate. But probably better
-        // to enforce this somehow?
-        val allFilters = when {
-            filter == null -> listOf()
-            filter.hasCompositeFilter() ->
-                filter.compositeFilter.filtersList.map { it.propertyFilter }
-            else -> listOf(filter.propertyFilter)
-        }
+        val allFilters = allQueryFilters(structuredQuery)
 
         // Most of the time, an entity passes a list of filters if it
         // passes each filter individually.  However, there is a
