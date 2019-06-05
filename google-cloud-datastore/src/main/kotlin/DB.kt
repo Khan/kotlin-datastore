@@ -140,6 +140,34 @@ private val datastoreClient: Deferred<com.google.cloud.datastore.Datastore> =
     }
 
 /**
+ * A thread-local that inherits the parent thread's value of localDB.
+ *
+ * In certain testing scenarios (notably for dataflow) we want to be able to
+ * mock the DB in the thread running the test, and then execute the test code
+ * in a thread pool, but still have it see the mock DB. Using an
+ * InheritableThreadLocal lets us do that. However, if we were to inherit a
+ * transactional context in a child thread, the behavior might be undefined
+ * depending on whether the transaction has committed before the background
+ * thread runs its code, so we throw if you try to start a new thread in a
+ * transaction.
+ */
+internal class InheritableThreadLocalDB :
+    InheritableThreadLocal<org.khanacademy.datastore.Datastore>() {
+
+    override fun childValue(
+        parentValue: org.khanacademy.datastore.Datastore?
+    ): org.khanacademy.datastore.Datastore? {
+        if (parentValue?.inTransaction() == true) {
+            throw IllegalStateException(
+                "Do not start a thread from within a transaction. It may " +
+                "lead to undefined behavior."
+            )
+        }
+        return parentValue
+    }
+}
+
+/**
  * Internal value for tracking datastore context.
  *
  * Datastore context is how we track what transaction we're part of, if any.
@@ -156,8 +184,8 @@ private val datastoreClient: Deferred<com.google.cloud.datastore.Datastore> =
  * @non_transactional), as well as starting an independent transaction
  * (propagation mode INDEPENDENT).
  */
-internal val localDB: ThreadLocal<org.khanacademy.datastore.Datastore> =
-    ThreadLocal()
+internal val localDB: InheritableThreadLocalDB =
+    InheritableThreadLocalDB()
 
 /**
  * Primary external-facing API for interacting with the datastore.

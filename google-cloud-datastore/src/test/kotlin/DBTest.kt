@@ -7,6 +7,7 @@ import com.nhaarman.mockitokotlin2.never
 import com.nhaarman.mockitokotlin2.verify
 import io.kotlintest.shouldBe
 import io.kotlintest.shouldNotBe
+import io.kotlintest.shouldThrow
 import io.kotlintest.specs.StringSpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -278,6 +279,34 @@ class DBTest : StringSpec({
             DB.query<RenamingTestModel>("RenamingTestModel") {
                 "y" eq "value"
             }.toList().size shouldBe 1
+        }
+    }
+
+    "DB access throws if you use a thread started in a transaction" {
+        withMockDatastore(listOf()) {
+            shouldThrow<IllegalStateException> {
+                DB.transactional {
+                    val thread = Thread {
+                        DB.get(Key<TestModel>("TestModel", 1L))
+                    }
+                    thread.start()
+                    thread.join()
+                }
+            }
+        }
+    }
+
+    "Child threads should inherit the value of DB" {
+        val key = Key<TestModel>("TestModel", 1L)
+        val obj = TestModel(key = key)
+        withMockDatastore(obj) {
+            var result: TestModel? = null
+            val thread = Thread {
+                result = DB.get(Key<TestModel>("TestModel", 1L))
+            }
+            thread.start()
+            thread.join()
+            result shouldBe obj
         }
     }
 })
