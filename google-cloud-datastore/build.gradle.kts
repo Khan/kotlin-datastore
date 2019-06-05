@@ -4,7 +4,7 @@ the in-code representation of entities.
 """
 
 group = "org.khanacademy"
-version = "0.1.4-pre1"
+version = "0.1.4"
 
 repositories {
     jcenter()
