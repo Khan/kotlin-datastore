@@ -71,6 +71,14 @@ inline fun <
 ): Quadruple<A?, B?, C?, D?> =
     internalGetMulti(this, a, b, c, d, A::class, B::class, C::class,
         D::class)
+
+/**
+ * Get multi for a list of keys all of the same type.
+ */
+inline fun <reified A : Keyed<A>> Datastore.getMulti(
+    keys: List<Key<A>>
+): List<A?> = internalGetMulti(this, keys, A::class)
+
 /**
  * Asynchronous get by key of an object from the datastore.
  *
@@ -110,6 +118,13 @@ inline fun <
 ): Deferred<Quadruple<A?, B?, C?, D?>?> =
     internalGetMultiAsync(this, a, b, c, d, A::class, B::class, C::class,
         D::class)
+
+/**
+ * Asynchronous get multi for a list of keys all of the same type.
+ */
+inline fun <reified A : Keyed<A>> Datastore.getMultiAsync(
+    keys: List<Key<A>>
+): Deferred<List<A?>> = internalGetMultiAsync(this, keys, A::class)
 
 /**
  * Exception thrown when we try to put a read-only model.
@@ -445,6 +460,16 @@ fun <A : Keyed<A>, B : Keyed<B>, C : Keyed<C>, D : Keyed<D>> internalGetMulti(
         formattedEntities[3]?.toTypedModel(dClass))
 }
 
+fun <A : Keyed<A>> internalGetMulti(
+    datastore: Datastore, keys: List<Key<A>>, keyClass: KClass<A>
+): List<A?> {
+    val cloudKeys = keys.map { it.toDatastoreKey() }.toTypedArray()
+    val entities = datastore.clientOrTransaction.get(*cloudKeys)
+    val formattedEntities = replaceMissingWithNull(keys, entities)
+
+    return formattedEntities.map { it?.toTypedModel(keyClass) }
+}
+
 private fun replaceMissingWithNull(
     keys: List<Key<*>>, entities: Iterator<Entity>?
 ): List<Entity?> {
@@ -494,6 +519,13 @@ internalGetMultiAsync(
 ): Deferred<Quadruple<A?, B?, C?, D?>?> = datastore.async {
     internalGetMulti(datastore, a, b, c, d, aClass, bClass, cClass, dClass)
 }
+
+fun <A : Keyed<A>> internalGetMultiAsync(
+        datastore: Datastore, keys: List<Key<A>>, keyClass: KClass<A>
+): Deferred<List<A?>> = datastore.async {
+    internalGetMulti(datastore, keys, keyClass)
+}
+
 /**
  * Run some code, setting localDB back to its current value afterwards.
  *

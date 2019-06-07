@@ -164,6 +164,19 @@ class DatastoreTestStubTest : StringSpec({
             DB.getMulti(firstKey, secondKey, thirdKey, fourthKey) shouldBe
                     Quadruple(firstKind, secondKind, thirdKind, fourthKind)
         }
+
+        // test getMulti for list of entities
+        withMockDatastore(
+            TestKind(Key("TestKind", "an-entity"))
+        ) {
+            DB.getMulti(listOf(firstKey, thirdKey)) shouldBe
+                listOf(null, null)
+
+            DB.putMulti(firstKind, thirdKind)
+
+            DB.getMulti(listOf(firstKey, thirdKey)) shouldBe
+                listOf(firstKind, thirdKind)
+        }
     }
 
     val queryFixtures = listOf(

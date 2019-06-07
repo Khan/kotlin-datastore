@@ -91,6 +91,15 @@ class DBTest : StringSpec({
             testModel2.key.toDatastoreKey())
     }
 
+    "It should call the datastore with a list of keys" {
+        val testDatastore = makeMockDatastore()
+        Datastore(testDatastore)
+        DB.getMulti(listOf(testModel1.key, testModel2.key))
+        verify(testDatastore).get(
+            testModel1.key.toDatastoreKey(),
+            testModel2.key.toDatastoreKey())
+    }
+
     "It should call the datastore with each of the key arguments async" {
         val testDatastore = makeMockDatastore()
         Datastore(testDatastore)
@@ -116,6 +125,26 @@ class DBTest : StringSpec({
         verify(testDatastore).get(secondaryModel.key.toDatastoreKey(),
             testModel3.key.toDatastoreKey(), testModel1.key.toDatastoreKey(),
             testModel2.key.toDatastoreKey())
+    }
+
+    "It should call the datastore with a list of keys asynchronously" {
+        val testDatastore = makeMockDatastore()
+        Datastore(testDatastore)
+        val op1 = DB.getMultiAsync(listOf(testModel1.key, testModel2.key))
+
+        val op2 = DB.getMultiAsync(listOf(testModel1.key, testModel2.key,
+            testModel3.key))
+
+        runBlocking {
+            op1.await()
+            op2.await()
+        }
+
+        verify(testDatastore).get(testModel1.key.toDatastoreKey(),
+            testModel2.key.toDatastoreKey())
+        verify(testDatastore).get(testModel1.key.toDatastoreKey(),
+            testModel2.key.toDatastoreKey(),
+            testModel3.key.toDatastoreKey())
     }
 
     "It should call the datastore when waiting on async operations" {
