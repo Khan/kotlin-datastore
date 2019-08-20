@@ -21,7 +21,7 @@ independent artifacts):
 """
 
 group = "org.khanacademy"
-version = "0.1.6-pre1"
+version = "0.1.6"
 
 repositories {
     jcenter()
