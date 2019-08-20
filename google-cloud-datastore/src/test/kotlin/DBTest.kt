@@ -63,6 +63,11 @@ class DBTest : StringSpec({
         kind = "SecondaryTestModel",
         idOrName = KeyName("secondary_test_model")
     ))
+    val readOnlyTestModel = ReadonlyTestModel("1", Key(
+        parentPath = listOf(),
+        kind = "ReadonlyTestModel",
+        idOrName = KeyName("read_only_test_model_1")
+    ))
 
     "In a non-transactional context, it should call the datastore directly" {
         val testDatastore = makeMockDatastore()
@@ -98,6 +103,23 @@ class DBTest : StringSpec({
         verify(testDatastore).get(
             testModel1.key.toDatastoreKey(),
             testModel2.key.toDatastoreKey())
+    }
+
+    "It should call the datastore with a list of models to put" {
+        val testDatastore = makeMockDatastore()
+        Datastore(testDatastore)
+        DB.putMulti(listOf(testModel1, testModel2))
+        verify(testDatastore).put(
+            testModel1.toDatastoreEntity(),
+            testModel2.toDatastoreEntity())
+    }
+
+    "It should refuse to put a list of read-only models" {
+        val testDatastore = makeMockDatastore()
+        Datastore(testDatastore)
+        shouldThrow<ReadonlyModelException> {
+            DB.putMulti(listOf(readOnlyTestModel))
+        }
     }
 
     "It should call the datastore with each of the key arguments async" {
@@ -145,6 +167,26 @@ class DBTest : StringSpec({
         verify(testDatastore).get(testModel1.key.toDatastoreKey(),
             testModel2.key.toDatastoreKey(),
             testModel3.key.toDatastoreKey())
+    }
+
+    "It should call the datastore with a list of models asynchronously" {
+        val testDatastore = makeMockDatastore()
+        Datastore(testDatastore)
+        val op1 = DB.putMultiAsync(listOf(testModel1, testModel2))
+
+        val op2 = DB.putMultiAsync(listOf(testModel1, testModel2,
+            testModel3))
+
+        runBlocking {
+            op1.await()
+            op2.await()
+        }
+
+        verify(testDatastore).put(testModel1.toDatastoreEntity(),
+            testModel2.toDatastoreEntity())
+        verify(testDatastore).put(testModel1.toDatastoreEntity(),
+            testModel2.toDatastoreEntity(),
+            testModel3.toDatastoreEntity())
     }
 
     "It should call the datastore when waiting on async operations" {

@@ -189,6 +189,22 @@ fun <A : Keyed<A>, B : Keyed<B>, C : Keyed<C>, D : Keyed<D>> Datastore.putMulti(
 }
 
 /**
+ * Synchronous put of a list of objects to the datastore.
+ */
+fun <T : Keyed<T>> Datastore.putMulti(
+    modelInstances: List<Keyed<T>>
+): List<Key<T>> {
+    modelInstances.firstOrNull()?.let { throwIfReadonly(it) }
+    val datastoreEntities = modelInstances.map {
+        it.toDatastoreEntity()
+    }.toTypedArray()
+
+    return this.clientOrTransaction.put(*datastoreEntities).map {
+        it.key.toKey<T>()
+    }
+}
+
+/**
  * Asynchronous put of an object to the datastore.
  */
 fun <T : Keyed<T>> Datastore.putAsync(
@@ -222,6 +238,15 @@ Datastore.putMultiAsync(
     DB.async {
         putMulti(a, b, c, d)
     }
+
+/**
+ * Asynchronous put of a list of objects to the datastore.
+ */
+fun <T : Keyed<T>> Datastore.putMultiAsync(
+    modelInstances: List<Keyed<T>>
+): Deferred<List<Key<T>>> =
+        DB.async { putMulti(modelInstances) }
+
 
 /**
  * Query for objects matching all the given filters.

@@ -165,14 +165,14 @@ class DatastoreTestStubTest : StringSpec({
                     Quadruple(firstKind, secondKind, thirdKind, fourthKind)
         }
 
-        // test getMulti for list of entities
+        // test getMulti/putMulti for list of entities
         withMockDatastore(
             TestKind(Key("TestKind", "an-entity"))
         ) {
             DB.getMulti(listOf(firstKey, thirdKey)) shouldBe
                 listOf(null, null)
 
-            DB.putMulti(firstKind, thirdKind)
+            DB.putMulti(listOf(firstKind, thirdKind))
 
             DB.getMulti(listOf(firstKey, thirdKey)) shouldBe
                 listOf(firstKind, thirdKind)
