@@ -135,8 +135,9 @@ internal fun unkeyedEntityToParameterMap(
         .toMap()
 }
 
-fun Keyed<*>.toDatastoreEntity(): Entity {
-    val builder = Entity.newBuilder(this.key.toDatastoreKey())
+fun Keyed<*>.toDatastoreEntity(projectId: String? = null): Entity {
+    val builder = Entity.newBuilder(
+        this.key.toDatastoreKey(projectId))
     buildEntityPropertiesFromObject(builder, this)
     return builder.build()
 }

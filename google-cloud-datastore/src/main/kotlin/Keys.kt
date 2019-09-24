@@ -12,6 +12,7 @@ import org.khanacademy.metadata.Keyed
 typealias DatastoreKey = com.google.cloud.datastore.Key
 
 internal fun rootKeyPathToDatastoreKey(
+    projectId: String?,
     path: KeyPathElement,
     namespace: String? = null
 ): DatastoreKey {
@@ -19,14 +20,16 @@ internal fun rootKeyPathToDatastoreKey(
     // Unfortunately this switching on type is required to distinguish between
     // overloaded java methods, even though the code is the same here for
     // either ID or name.
+    // TODO(colin): this implies that this library can only access the
+    // datastore from one project per executable. Maybe relax this
+    // constraint?
     val builder = when (idOrName) {
-        // TODO(colin): this implies that this library can only access the
-        // datastore from one project per executable. Maybe relax this
-        // constraint?
         is KeyID -> DatastoreKey.newBuilder(
-            DBEnvAndProject.getEnvAndProject().project, kind, idOrName.value)
+            projectId ?: DBEnvAndProject.getEnvAndProject().project,
+            kind, idOrName.value)
         is KeyName -> DatastoreKey.newBuilder(
-            DBEnvAndProject.getEnvAndProject().project, kind, idOrName.value)
+            projectId ?: DBEnvAndProject.getEnvAndProject().project,
+            kind, idOrName.value)
     }
     namespace?.let { builder.setNamespace(namespace) }
     return builder.build()
@@ -53,11 +56,11 @@ internal fun keyPathElementToDatastoreKey(
 /**
  * Convert our abstract keys to the Google cloud datastore key class.
  */
-fun Key<*>.toDatastoreKey(): DatastoreKey {
+fun Key<*>.toDatastoreKey(projectId: String? = null): DatastoreKey {
     val rootPath = path().first()
     val remainingPath = path().drop(1)
     return remainingPath.fold(
-        rootKeyPathToDatastoreKey(rootPath, namespace)
+        rootKeyPathToDatastoreKey(projectId, rootPath, namespace)
     ) { parent, path ->
         keyPathElementToDatastoreKey(parent, path, namespace)
     }

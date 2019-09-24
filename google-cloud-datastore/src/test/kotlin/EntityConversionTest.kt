@@ -289,6 +289,29 @@ class EntityConversionTest : StringSpec({
         entity.getKey("aKey").name shouldBe "key-prop"
     }
 
+    "It provides an entity keyed for a specified project" {
+        val testKey = Key<PrimitiveTestModel>(
+            "PrimitiveTestModel", "the-first-one")
+        val keyProp = Key<SecondaryTestModel>(
+            "SecondaryTestModel", "key-prop")
+        val testModel = PrimitiveTestModel(
+            aKey = keyProp,
+            aString = "string_value",
+            aLong = 4L,
+            aBool = true,
+            aDouble = 9.0,
+            someBytes = "byte_value".toByteArray(),
+            aTimestamp = LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC),
+            aDate = LocalDate.of(2019, 4, 17),
+            aTime = LocalTime.of(0, 1, 2),
+            aGeoPt = GeoPt(latitude = 3.0, longitude = 4.0),
+            nonNullableBool = false,
+            nonNullableBytes = "byte_value_2".toByteArray(),
+            key = testKey)
+        val entity = testModel.toDatastoreEntity("project-2")
+        entity.key.projectId shouldBe "project-2"
+    }
+
     "It will explicitly set null when transferring to the entity" {
         val testKey = Key<PrimitiveTestModel>(
             "PrimitiveTestModel", "the-first-one")
