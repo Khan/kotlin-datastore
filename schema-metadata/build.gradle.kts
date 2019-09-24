@@ -6,7 +6,7 @@ be used to represent schema metadata for other uses as well.
 """
 
 group = "org.khanacademy"
-version = "0.1.7"
+version = "0.1.8-pre1"
 
 repositories {
     jcenter()
